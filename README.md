@@ -13,27 +13,13 @@ the terminal.
 
 ## Preview
 
-The browse screen — file tree + code view on top, a search panel and a git panel
-docked below (colours render in a real terminal):
+The four-panel browse screen — file tree + code view on top, the search panel
+and the git panel docked below:
 
-```text
-   File Viewer — my-project  ⎇ main
- ▾ my-project/                    │  1 package main
-   ▸ cmd/                         │  2
-   ▸ internal/                    │  3 func main() {
-     go.mod                       │  4     run()
-     README.md                    │  5 }
- ── FIND FILE ──────────────────── ── CHANGES (1 staged / 3) · main ──
-  ⌕ engine                          [ ] docs/screenshots/
-  ────────────────────────────      [~] internal/
-  ▸ internal/search/engine.go         [✓] ui/
-    internal/search/walk.go             [✓] M app.go
-  2 / 4 files                         [ ] M viewer.go
-  tab · ^p find · ^f search · g log · d diff · m md · ? help · q quit
-```
+![File Viewer running in a Herdr pane](docs/screenshots/browse.png)
 
-More text previews are in [`docs/screenshots/`](docs/screenshots). To add real
-terminal screenshots, run the plugin (`./bin/file-viewer .`) and drop PNGs there.
+Plain-text renders of other views live in
+[`docs/screenshots/`](docs/screenshots).
 
 ## Features
 
