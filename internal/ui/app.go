@@ -616,6 +616,7 @@ func (m Model) handleSearchFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.finder.input, cmd = m.finder.input.Update(msg)
 	m.finder.refresh()
+	m.finder.resetCursor() // new query → jump to the top match
 	return m, cmd
 }
 

@@ -41,11 +41,22 @@ func (p *finderPanel) setFiles(files []string) {
 func (p *finderPanel) focus() tea.Cmd { return p.input.Focus() }
 func (p *finderPanel) blur()          { p.input.Blur() }
 
-// refresh re-runs the fuzzy match against the current query.
+// refresh re-runs the fuzzy match against the current query, keeping the cursor
+// where it is (clamped). It must NOT jump to the top — this runs on every
+// background file-index refresh, and resetting here would yank the selection to
+// row 0 mid-scroll. Query changes reset the cursor via resetCursor().
 func (p *finderPanel) refresh() {
 	p.results = p.matcher.Match(p.input.Value(), finderLimit)
-	p.cursor = 0
+	if p.cursor >= len(p.results) {
+		p.cursor = len(p.results) - 1
+	}
+	if p.cursor < 0 {
+		p.cursor = 0
+	}
 }
+
+// resetCursor moves the selection back to the top — used when the query changes.
+func (p *finderPanel) resetCursor() { p.cursor = 0 }
 
 func (p *finderPanel) moveUp() {
 	if p.cursor > 0 {
