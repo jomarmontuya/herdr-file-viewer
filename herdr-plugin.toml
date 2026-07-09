@@ -5,10 +5,11 @@ min_herdr_version = "0.7.0"
 description = "A pretty file browser, fuzzy file finder and in-file content search for Herdr panes."
 platforms = ["linux", "macos"]
 
-# Compile the Go TUI at install time. The binary is self-contained: no ripgrep,
-# fzf, or any external process is required at runtime.
+# At install time, download the prebuilt binary for the user's platform (no Go
+# required). Falls back to `go build` if the download can't happen and Go is
+# available. The binary is self-contained: no ripgrep/fzf/external process.
 [[build]]
-command = ["go", "build", "-o", "bin/file-viewer", "./cmd/file-viewer"]
+command = ["sh", "scripts/fetch-or-build.sh"]
 
 # The pane that hosts the full-screen viewer. The command path is resolved
 # relative to the plugin root; `placement` is the default if the open request

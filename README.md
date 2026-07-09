@@ -186,15 +186,13 @@ aliases work on Linux/Windows.
 
 ## Install
 
-> **Requires Go 1.25+** on the machine — Herdr compiles the plugin binary from
-> source on install (the manifest's `[[build]]` step runs
-> `go build -o bin/file-viewer ./cmd/file-viewer`).
-
-### From the marketplace / GitHub
-
 ```sh
 herdr plugin install ismaelosuna7824/herdr-file-viewer
 ```
+
+On install the `[[build]]` step **downloads a prebuilt binary** for your platform
+(macOS/Linux, amd64/arm64) from the GitHub release — **no Go required**. If a
+prebuilt binary isn't available it falls back to `go build` (needs Go 1.25+).
 
 This repo is tagged with the `herdr-plugin` topic, so it also shows up in Herdr's
 plugin marketplace (`/plugins/`).
