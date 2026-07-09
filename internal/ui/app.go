@@ -94,6 +94,13 @@ type Model struct {
 	updateLatest string // newer release tag, if one is available
 	statusNote   string // transient footer note (e.g. "no editor set")
 
+	// Editor picker overlay (shown when no default editor is configured).
+	pickerActive  bool
+	pickerEditors []editor.Editor
+	pickerCursor  int
+	pickerTarget  string // file or project dir to open
+	pickerLabel   string // what's being opened, for the title
+
 	// Git-operation overlays (new branch / commit prompt, and confirm dialogs).
 	prompt      gitOp
 	promptInput textinput.Model
@@ -146,8 +153,9 @@ type diffLoadedMsg struct{ diff gitdiff.FileDiff }
 // updateMsg carries a newer release tag (empty = up to date).
 type updateMsg struct{ latest string }
 
-// editorClosedMsg fires when the external editor exits, so we reload the file.
-type editorClosedMsg struct{}
+// editorClosedMsg fires when the external editor exits (err set if it failed to
+// launch, e.g. the command isn't on PATH).
+type editorClosedMsg struct{ err error }
 
 // highlightMsg carries the result of asynchronous syntax highlighting.
 type highlightMsg struct {
@@ -365,6 +373,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case editorClosedMsg:
+		if msg.err != nil {
+			m.statusNote = "editor failed: " + msg.err.Error()
+			return m, nil
+		}
 		// The file may have changed in the editor — reload the view and git.
 		m.tree.Refresh()
 		var cmd tea.Cmd
@@ -407,6 +419,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	// Overlays take priority over everything else.
+	if m.pickerActive {
+		return m.handlePickerKey(msg)
+	}
 	if m.prompt != opNone {
 		return m.handlePromptKey(msg)
 	}
@@ -558,14 +573,11 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "e":
-		// Open the file in the user's editor ($VISUAL/$EDITOR/FILE_VIEWER_EDITOR).
-		if t := m.editTarget(); t != "" {
-			if cmd := editor.Command(t); cmd != nil {
-				return m, tea.ExecProcess(cmd, func(error) tea.Msg { return editorClosedMsg{} })
-			}
-			m.statusNote = "no editor set — export EDITOR=nvim (or code, zed, hx…)"
-		}
-		return m, nil
+		// Open the selected/open file in a configured editor.
+		return m.openInEditor(m.editTarget(), false)
+	case "E":
+		// Open the whole project (root) in a configured editor.
+		return m.openInEditor(m.root, true)
 	case "?":
 		m.mode = modeHelp
 		return m, nil
@@ -978,6 +990,74 @@ func (m *Model) previewSelected() tea.Cmd {
 	return nil
 }
 
+// openInEditor opens target in a configured editor. With a default (or a single
+// configured editor) it opens immediately; otherwise it shows the picker.
+func (m Model) openInEditor(target string, isProject bool) (tea.Model, tea.Cmd) {
+	if target == "" {
+		return m, nil
+	}
+	eds := editor.Load()
+	if len(eds) == 0 {
+		if p := editor.ConfigPath(); p != "" {
+			m.statusNote = "no editors configured — add them to " + p
+		} else {
+			m.statusNote = "no editors configured (set $EDITOR or the editors config)"
+		}
+		return m, nil
+	}
+	if e, ok := editor.Preferred(eds); ok {
+		return m, editorExec(e, target)
+	}
+	// No default and several configured → ask which one.
+	m.pickerEditors = eds
+	m.pickerCursor = 0
+	m.pickerTarget = target
+	m.pickerLabel = filepath.Base(target)
+	if isProject {
+		m.pickerLabel += "/  (project)"
+	}
+	m.pickerActive = true
+	return m, nil
+}
+
+func editorExec(e editor.Editor, target string) tea.Cmd {
+	return tea.ExecProcess(e.Command(target), func(err error) tea.Msg { return editorClosedMsg{err: err} })
+}
+
+// handlePickerKey drives the editor picker overlay.
+func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.pickerActive = false
+		return m, nil
+	case "up", "k":
+		if m.pickerCursor > 0 {
+			m.pickerCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.pickerCursor < len(m.pickerEditors)-1 {
+			m.pickerCursor++
+		}
+		return m, nil
+	case "enter":
+		e := m.pickerEditors[m.pickerCursor]
+		target := m.pickerTarget
+		m.pickerActive = false
+		return m, editorExec(e, target)
+	}
+	// Number keys pick directly (1-9).
+	if len(msg.String()) == 1 {
+		if d := int(msg.String()[0] - '1'); d >= 0 && d < len(m.pickerEditors) && d < 9 {
+			e := m.pickerEditors[d]
+			target := m.pickerTarget
+			m.pickerActive = false
+			return m, editorExec(e, target)
+		}
+	}
+	return m, nil
+}
+
 // editTarget returns the file to open in the editor: the selected tree node if
 // it's a file, otherwise the file open in the viewer.
 func (m Model) editTarget() string {
@@ -1119,6 +1199,9 @@ func (m Model) View() string {
 	if !m.ready {
 		return "loading…"
 	}
+	if m.pickerActive {
+		return m.viewPicker()
+	}
 	if m.prompt != opNone {
 		return m.viewPrompt()
 	}
@@ -1155,6 +1238,27 @@ func (m Model) viewPrompt() string {
 	box := modalBox(min(72, m.width-6)).Render(inner)
 	body := centerModal(m.width, m.height-2, box)
 	return m.frame(body, "enter confirm · esc cancel")
+}
+
+// viewPicker renders the editor chooser shown when no default editor is set.
+func (m Model) viewPicker() string {
+	lines := []string{m.st.modalTitle.Render("Open  " + m.pickerLabel + "  in…"), ""}
+	for i, e := range m.pickerEditors {
+		num := string(rune('1' + i))
+		if i >= 9 {
+			num = " "
+		}
+		row := num + "  " + e.Name
+		if i == m.pickerCursor {
+			row = m.st.modalSel.Render("▸ " + num + "  " + e.Name)
+		} else {
+			row = "  " + row
+		}
+		lines = append(lines, row)
+	}
+	box := modalBox(min(60, m.width-6)).Render(strings.Join(lines, "\n"))
+	body := centerModal(m.width, m.height-2, box)
+	return m.frame(body, "↑↓ move · 1-9 / enter open · esc cancel")
 }
 
 // viewConfirm renders the centered yes/no dialog for merge / rebase / delete.

@@ -20,7 +20,7 @@ var helpGroups = []helpGroup{
 		{"→ / enter", "open / expand"},
 		{"← / esc", "collapse / back"},
 		{"space", "toggle dir"},
-		{"e", "edit ($EDITOR)"},
+		{"e / E", "edit file / open project"},
 		{"d", "review diff"},
 		{"L", "locate file in tree"},
 		{"o", "open location in OS"},

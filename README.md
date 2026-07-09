@@ -129,7 +129,8 @@ red inside the panel — nothing silently fails.
 | `Ctrl+F` | Focus the search panel in content-search mode |
 | `L` | Locate the open file in the tree (reveal + focus it) |
 | `o` | Open the file's location in the OS file manager |
-| `e` | Edit the file in your editor (`$VISUAL`/`$EDITOR`) |
+| `e` | Edit the current **file** in your editor ([configurable](#editing-files)) |
+| `E` | Open the whole **project** in your editor |
 | `d` | Review the selected/open file's diff against `HEAD` |
 | `g` | Focus the git-log panel (toggle back to the tree) |
 | `m` | Toggle rendered markdown ↔ source (markdown files only) |
@@ -226,24 +227,48 @@ in-app keybinding reference.
 
 ## Editing files
 
-The viewer is read-only, but `e` opens the current file in **your** editor — it
-never bundles one. It resolves the command from these, in order:
+The viewer is read-only, but it opens **your** editor on demand — it never
+bundles one:
 
-| Variable | Notes |
-|----------|-------|
-| `FILE_VIEWER_EDITOR` | plugin-specific override |
-| `VISUAL` | standard, for full-screen editors |
-| `EDITOR` | standard fallback |
+- `e` — open the current **file**
+- `E` — open the whole **project** (the workspace directory)
 
-The value is a full command, so any editor works — terminal ones open in the
-pane and hand it back on exit; GUI ones open their window:
+Terminal editors open right in the pane and hand it back on exit; GUI editors
+open their own window. After you save and close, the viewer reloads the file and
+git status.
 
-```sh
-export EDITOR=nvim         # or: hx, vim
-export VISUAL="code --wait"  # or: zed --wait, subl --wait
+### Configuring editors
+
+List one or more editors in a config file — pick a **default**, or get a
+**picker** to choose each time. The file lives at:
+
+```
+$HERDR_PLUGIN_CONFIG_DIR/editors
 ```
 
-After you save and close, the viewer reloads the file and git status.
+On macOS that's usually
+`~/.config/herdr/plugins/config/ismaelosuna.file-viewer/editors`. One editor per
+line, `name = command`. A leading `*` marks the default; the file or project
+path is appended automatically, so **don't** add a trailing `.`:
+
+```ini
+# A leading * = default (e/E open in it directly, no prompt).
+# No default → you're asked which editor to use.
+* zed = open -a Zed
+  code = open -a "Visual Studio Code"
+  nvim = nvim
+  nano = nano
+```
+
+**macOS tip:** use `open -a <App Name>` for GUI editors — it finds the app by
+name and needs no CLI on your `PATH` (a bare `zed`/`code` only works if you've
+installed their command-line tool). If an editor fails to launch, the viewer now
+shows the error in the footer instead of failing silently.
+
+Linux/other: use the command directly, e.g. `code`, `zed`, `nvim`, `subl`.
+
+**No config file?** It falls back to a single editor from the first of
+`$FILE_VIEWER_EDITOR`, `$VISUAL`, or `$EDITOR`.
 
 ## Updating
 
