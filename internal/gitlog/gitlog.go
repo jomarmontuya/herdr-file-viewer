@@ -133,6 +133,12 @@ func DeleteBranch(ctx context.Context, root, name string) error {
 	return runGit(ctx, root, "branch", "-d", name)
 }
 
+// CommitStaged commits only what's already staged (respects the staging view).
+// It does NOT run `git add` — stage first with space (a file/dir) or A (all).
+func CommitStaged(ctx context.Context, root, message string) error {
+	return runGit(ctx, root, "commit", "-m", message)
+}
+
 // CommitAll stages every change (tracked and untracked) and commits it.
 func CommitAll(ctx context.Context, root, message string) error {
 	if err := runGit(ctx, root, "add", "-A"); err != nil {

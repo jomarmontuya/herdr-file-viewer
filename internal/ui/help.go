@@ -59,7 +59,7 @@ var helpGroups = []helpGroup{
 	{"Git · local ops", []helpEntry{
 		{"n", "new branch"},
 		{"A", "stage all (add -A)"},
-		{"c", "commit all"},
+		{"c", "commit staged"},
 		{"a", "amend last commit"},
 		{"u", "undo last commit"},
 		{"t", "tag at HEAD"},

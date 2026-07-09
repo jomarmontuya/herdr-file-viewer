@@ -412,7 +412,8 @@ func (m Model) handlePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case opNewBranch:
 			return m, gitOpCmd(func() error { return gitlog.CreateBranch(context.Background(), root, val) })
 		case opCommit:
-			return m, gitOpCmd(func() error { return gitlog.CommitAll(context.Background(), root, val) })
+			// Commit only what's staged — never `git add -A`. Stage with space/A.
+			return m, gitOpCmd(func() error { return gitlog.CommitStaged(context.Background(), root, val) })
 		case opTag:
 			return m, gitOpCmd(func() error { return gitlog.CreateTag(context.Background(), root, val) })
 		}

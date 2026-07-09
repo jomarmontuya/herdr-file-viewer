@@ -91,7 +91,7 @@ From the branch view you can drive the whole git flow:
 |-----|--------|--|
 | `Enter` | Switch to the selected branch | |
 | `n` | Create a new branch (from the current one) | prompt |
-| `c` | Commit all changes | prompt |
+| `c` | Commit staged changes (stage first with `space`/`A`) | prompt |
 | `a` | Amend the last commit with current changes | confirm |
 | `u` | Undo the last commit (keeps changes staged) | confirm |
 | `m` | Merge the selected branch into the current one | confirm |
