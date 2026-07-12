@@ -36,9 +36,12 @@ fi`)
 	if strings.Count(got, "pane list --workspace w9") < 2 {
 		t.Fatalf("workspace hook must wait for the initial pane:\n%s", got)
 	}
-	want := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --workspace w9 --target-pane w9:p1 --direction right --no-focus"
+	want := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w9:p1 --direction right --no-focus"
 	if !strings.Contains(got, want) {
 		t.Fatalf("workspace hook opened wrong layout\nwant: %s\ngot:\n%s", want, got)
+	}
+	if strings.Contains(got, "--workspace w9 --target-pane") {
+		t.Fatalf("Herdr rejects workspace plus target-pane for a split:\n%s", got)
 	}
 }
 
