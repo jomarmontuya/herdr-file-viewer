@@ -34,14 +34,21 @@ var fileTabStateMu sync.Mutex
 // by a process-wide lock everywhere and an advisory cross-process lock on the
 // macOS/Linux platforms supported by the plugin, so clicks from multiple tree
 // panes cannot create duplicate tabs for the same absolute path.
-func OpenFileTab(workspaceID, path string) error {
+func OpenFileTab(workspaceID, path, projectRoot string) error {
 	if workspaceID == "" {
 		return errors.New("Herdr workspace ID is unavailable")
 	}
 	if path == "" {
 		return errors.New("file path is empty")
 	}
+	if projectRoot == "" {
+		return errors.New("project root is empty")
+	}
 	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return err
 	}
@@ -59,7 +66,7 @@ func OpenFileTab(workspaceID, path string) error {
 			}
 		}
 		var openErr error
-		openedTabID, openErr = openNewFileTab(bin, workspaceID, abs, state)
+		openedTabID, openErr = openNewFileTab(bin, workspaceID, abs, root, state)
 		return openErr
 	}
 	if stateDir == "" {
@@ -75,7 +82,7 @@ func OpenFileTab(workspaceID, path string) error {
 	return err
 }
 
-func openNewFileTab(bin, workspaceID, path string, state *fileTabState) (string, error) {
+func openNewFileTab(bin, workspaceID, path, projectRoot string, state *fileTabState) (string, error) {
 	out, err := exec.Command(bin, openFileTabArgs(workspaceID, path)...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("open Herdr file tab: %w: %s", err, out)
@@ -90,7 +97,7 @@ func openNewFileTab(bin, workspaceID, path string, state *fileTabState) (string,
 	if opened.PaneID == "" {
 		return opened.TabID, errors.New("Herdr pane response did not include a pane ID")
 	}
-	if out, err = exec.Command(bin, openTreeArgs(opened.PaneID)...).CombinedOutput(); err != nil {
+	if out, err = exec.Command(bin, openTreeArgs(opened.PaneID, projectRoot)...).CombinedOutput(); err != nil {
 		return opened.TabID, fmt.Errorf("attach Herdr file tree: %w: %s", err, out)
 	}
 	if state != nil {
@@ -132,13 +139,14 @@ func openFileTabArgs(workspaceID, path string) []string {
 	}
 }
 
-func openTreeArgs(targetPaneID string) []string {
+func openTreeArgs(targetPaneID, projectRoot string) []string {
 	return []string{
 		"plugin", "pane", "open",
 		"--plugin", pluginID,
 		"--entrypoint", "viewer",
 		"--placement", "split",
 		"--target-pane", targetPaneID,
+		"--env", "HERDR_TREE_ROOT=" + projectRoot,
 		"--direction", "right",
 		"--no-focus",
 	}

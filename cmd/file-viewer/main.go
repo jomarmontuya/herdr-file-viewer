@@ -66,6 +66,9 @@ func resolveRoot() string {
 			return arg
 		}
 	}
+	if p := os.Getenv("HERDR_TREE_ROOT"); isDir(p) {
+		return p
+	}
 	if p := workspacePathFromContext(); p != "" {
 		return p
 	}

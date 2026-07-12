@@ -576,8 +576,9 @@ func (m Model) openSelectedFileTab() tea.Cmd {
 	}
 	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
 	path := n.Path
+	root := m.root
 	return func() tea.Msg {
-		return fileTabOpenedMsg{err: herdr.OpenFileTab(workspaceID, path)}
+		return fileTabOpenedMsg{err: herdr.OpenFileTab(workspaceID, path, root)}
 	}
 }
 

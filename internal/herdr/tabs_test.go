@@ -96,14 +96,19 @@ if [ "$1 $2 $3" = "plugin pane open" ]; then
   esac
 else
   printf '%s\n' '{"result":{"type":"tab_renamed"}}'
-fi`)
+	fi`)
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
-	path := filepath.Join(t.TempDir(), "file with spaces.go")
+	root := t.TempDir()
+	nested := filepath.Join(root, "scripts")
+	if err := os.Mkdir(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(nested, "file with spaces.go")
 	if err := os.WriteFile(path, []byte("package example\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := OpenFileTab("w2", path); err != nil {
+	if err := OpenFileTab("w2", path, root); err != nil {
 		t.Fatal(err)
 	}
 	logged, err := os.ReadFile(logPath)
@@ -113,7 +118,7 @@ fi`)
 	if !strings.Contains(string(logged), "tab rename w2:t8 file with spaces.go") {
 		t.Fatalf("expected tab rename in log, got:\n%s", logged)
 	}
-	wantTree := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w2:p8 --direction right --no-focus"
+	wantTree := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w2:p8 --env HERDR_TREE_ROOT=" + root + " --direction right --no-focus"
 	if !strings.Contains(string(logged), wantTree) {
 		t.Fatalf("new file tab should retain the right-side tree\nwant: %s\ngot:\n%s", wantTree, logged)
 	}
@@ -144,10 +149,10 @@ fi`)
 	}
 	t.Setenv("HERDR_TEST_FILE_DIR", filepath.Dir(path))
 
-	if err := OpenFileTab("w2", path); err != nil {
+	if err := OpenFileTab("w2", path, filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
-	if err := OpenFileTab("w2", path); err != nil {
+	if err := OpenFileTab("w2", path, filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
 	logged, err := os.ReadFile(logPath)
@@ -196,7 +201,7 @@ fi`)
 		t.Fatal(err)
 	}
 
-	if err := OpenFileTab("w2", path); err != nil {
+	if err := OpenFileTab("w2", path, filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
 	logged, err := os.ReadFile(logPath)
@@ -242,7 +247,7 @@ fi`)
 		t.Fatal(err)
 	}
 
-	if err := OpenFileTab("w2", path); err != nil {
+	if err := OpenFileTab("w2", path, filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
 	logged, err := os.ReadFile(logPath)
@@ -284,7 +289,7 @@ fi`)
 	}
 	path := filepath.Join(t.TempDir(), "valid.go")
 
-	if err := OpenFileTab("w3", path); err != nil {
+	if err := OpenFileTab("w3", path, filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
 	saved, err := loadFileTabState(statePath)
@@ -327,18 +332,21 @@ func TestFileTabStateInitializesNilMaps(t *testing.T) {
 }
 
 func TestOpenFileTabValidatesContextAndPath(t *testing.T) {
-	if err := OpenFileTab("", "/tmp/file"); err == nil || !strings.Contains(err.Error(), "workspace ID") {
+	if err := OpenFileTab("", "/tmp/file", "/tmp"); err == nil || !strings.Contains(err.Error(), "workspace ID") {
 		t.Fatalf("expected missing workspace error, got %v", err)
 	}
-	if err := OpenFileTab("w1", ""); err == nil || !strings.Contains(err.Error(), "file path") {
+	if err := OpenFileTab("w1", "", "/tmp"); err == nil || !strings.Contains(err.Error(), "file path") {
 		t.Fatalf("expected missing path error, got %v", err)
+	}
+	if err := OpenFileTab("w1", "/tmp/file", ""); err == nil || !strings.Contains(err.Error(), "project root") {
+		t.Fatalf("expected missing project root error, got %v", err)
 	}
 }
 
 func TestOpenFileTabReportsOpenAndRenameFailures(t *testing.T) {
 	t.Run("open", func(t *testing.T) {
 		fakeHerdr(t, `printf '%s\n' 'open failed' >&2; exit 7`)
-		err := OpenFileTab("w1", "/tmp/example.go")
+		err := OpenFileTab("w1", "/tmp/example.go", "/tmp")
 		if err == nil || !strings.Contains(err.Error(), "open failed") {
 			t.Fatalf("expected open stderr, got %v", err)
 		}
@@ -352,7 +360,7 @@ else
   printf '%s\n' 'rename failed' >&2
   exit 9
 fi`)
-		err := OpenFileTab("w1", "/tmp/example.go")
+		err := OpenFileTab("w1", "/tmp/example.go", "/tmp")
 		if err == nil || !strings.Contains(err.Error(), "rename failed") {
 			t.Fatalf("expected rename stderr, got %v", err)
 		}
@@ -376,7 +384,7 @@ else
 fi`)
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
 
-	err := OpenFileTab("w2", "/tmp/example.go")
+	err := OpenFileTab("w2", "/tmp/example.go", "/tmp")
 	if err == nil || !strings.Contains(err.Error(), "tree failed") {
 		t.Fatalf("expected tree attachment failure, got %v", err)
 	}
@@ -409,7 +417,7 @@ fi`)
 	t.Setenv("HERDR_TEST_STATE_DIR", stateDir)
 	defer os.Chmod(stateDir, 0o700) //nolint:errcheck
 
-	err := OpenFileTab("w2", "/tmp/example.go")
+	err := OpenFileTab("w2", "/tmp/example.go", "/tmp")
 	if err == nil || !strings.Contains(err.Error(), "save Herdr file-tab state") {
 		t.Fatalf("expected state-save failure, got %v", err)
 	}

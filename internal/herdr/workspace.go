@@ -58,7 +58,7 @@ func EnsureWorkspaceTree(workspaceID string) error {
 			return fmt.Errorf("decode new Herdr workspace panes: %w", err)
 		}
 
-		targetPaneID := ""
+		var targetPane paneContext
 		for _, pane := range panes {
 			if pane.WorkspaceID != workspaceID {
 				continue
@@ -66,12 +66,12 @@ func EnsureWorkspaceTree(workspaceID string) error {
 			if pane.Label == "File Tree" {
 				return nil
 			}
-			if targetPaneID == "" && pane.PaneID != "" {
-				targetPaneID = pane.PaneID
+			if targetPane.PaneID == "" && pane.PaneID != "" {
+				targetPane = pane
 			}
 		}
-		if targetPaneID != "" {
-			out, err = exec.Command(bin, openWorkspaceTreeArgs(targetPaneID)...).CombinedOutput()
+		if targetPane.PaneID != "" {
+			out, err = exec.Command(bin, openTreeArgs(targetPane.PaneID, targetPane.Cwd)...).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("attach default Herdr file tree: %w: %s", err, out)
 			}
@@ -82,16 +82,4 @@ func EnsureWorkspaceTree(workspaceID string) error {
 		}
 	}
 	return errors.New("new Herdr workspace did not create an initial pane")
-}
-
-func openWorkspaceTreeArgs(targetPaneID string) []string {
-	return []string{
-		"plugin", "pane", "open",
-		"--plugin", pluginID,
-		"--entrypoint", "viewer",
-		"--placement", "split",
-		"--target-pane", targetPaneID,
-		"--direction", "right",
-		"--no-focus",
-	}
 }
