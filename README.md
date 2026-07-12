@@ -233,9 +233,10 @@ Swap `prefix+f` / `prefix+shift+f` for whatever keys you like. Reload Herdr (or
 your config) for the changes to take effect. Once open, press `?` for the full
 in-app keybinding reference.
 
-Herdr plugin panes belong to one tab. The right-side tree therefore stays in
-the CLI tab where you opened it; it cannot remain globally pinned while you
-switch to file tabs without a future native Herdr sidebar API.
+Herdr plugin panes belong to one tab, so each file tab opened by this plugin
+gets its own narrow tree split on the right. Clicking the same absolute path in
+the same workspace focuses its existing tab; closed-tab records are detected
+and replaced automatically.
 
 ## Editing files
 

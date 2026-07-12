@@ -67,6 +67,18 @@ func TestParseOpenedTabIDRejectsMalformedResponse(t *testing.T) {
 	}
 }
 
+func TestParseTabContextRejectsMalformedOrIncompleteResponse(t *testing.T) {
+	for _, raw := range [][]byte{
+		[]byte("not-json"),
+		[]byte(`{"result":{"tab":{"tab_id":"w2:t8"}}}`),
+		[]byte(`{"result":{"tab":{"workspace_id":"w2"}}}`),
+	} {
+		if _, err := parseTabContext(raw); err == nil {
+			t.Fatalf("expected error for %q", raw)
+		}
+	}
+}
+
 func TestOpenFileTabOpensRenamesAndAttachesTree(t *testing.T) {
 	_, logPath := fakeHerdr(t, `
 if [ "$1 $2 $3" = "plugin pane open" ]; then
@@ -141,6 +153,120 @@ fi`)
 	}
 	if !strings.Contains(got, "tab get w2:t8") || !strings.Contains(got, "tab focus w2:t8") {
 		t.Fatalf("same file should validate and focus its existing tab:\n%s", got)
+	}
+}
+
+func TestOpenFileTabReplacesClosedTabRecord(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "tab get" ]; then
+  printf '%s\n' 'tab closed' >&2
+  exit 4
+elif [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-new","tab_id":"w2:t-new"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-tree","tab_id":"w2:t-new"}}}}'
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	stateDir := t.TempDir()
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	path := filepath.Join(t.TempDir(), "reopened.go")
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newFileTabState()
+	state.set("w2", abs, "w2:t-closed")
+	if err := saveFileTabState(filepath.Join(stateDir, fileTabStateFile), state); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := OpenFileTab("w2", path); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(logged)
+	if !strings.Contains(got, "tab get w2:t-closed") || strings.Count(got, "--entrypoint file") != 1 {
+		t.Fatalf("closed record should be checked then replaced:\n%s", got)
+	}
+	saved, err := loadFileTabState(filepath.Join(stateDir, fileTabStateFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := saved.tabID("w2", abs); got != "w2:t-new" {
+		t.Fatalf("closed record not replaced: got %q", got)
+	}
+}
+
+func TestOpenFileTabRecoversFromMalformedState(t *testing.T) {
+	fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w3:p3","tab_id":"w3:t3"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w3:p4","tab_id":"w3:t3"}}}}'
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	stateDir := t.TempDir()
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	statePath := filepath.Join(stateDir, fileTabStateFile)
+	if err := os.WriteFile(statePath, []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "valid.go")
+
+	if err := OpenFileTab("w3", path); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := loadFileTabState(statePath)
+	if err != nil {
+		t.Fatalf("malformed state should be atomically replaced: %v", err)
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := saved.tabID("w3", abs); got != "w3:t3" {
+		t.Fatalf("recovered state missing file record: got %q", got)
+	}
+}
+
+func TestFileTabStateDistinguishesSameBasenamePaths(t *testing.T) {
+	state := newFileTabState()
+	first := filepath.Join(t.TempDir(), "main.go")
+	second := filepath.Join(t.TempDir(), "main.go")
+	state.set("w4", first, "w4:t1")
+	state.set("w4", second, "w4:t2")
+
+	if got := state.tabID("w4", first); got != "w4:t1" {
+		t.Fatalf("first path got %q", got)
+	}
+	if got := state.tabID("w4", second); got != "w4:t2" {
+		t.Fatalf("second path got %q", got)
+	}
+}
+
+func TestFileTabStateInitializesNilMaps(t *testing.T) {
+	state := fileTabState{}
+	state.set("w4", "/tmp/main.go", "w4:t1")
+	if got := state.tabID("w4", "/tmp/main.go"); got != "w4:t1" {
+		t.Fatalf("initialized state got %q", got)
+	}
+	if state.Version != 1 {
+		t.Fatalf("initialized state version got %d", state.Version)
 	}
 }
 
