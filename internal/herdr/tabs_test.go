@@ -67,13 +67,21 @@ func TestParseOpenedTabIDRejectsMalformedResponse(t *testing.T) {
 	}
 }
 
-func TestOpenFileTabOpensAndRenamesTab(t *testing.T) {
+func TestOpenFileTabOpensRenamesAndAttachesTree(t *testing.T) {
 	_, logPath := fakeHerdr(t, `
 if [ "$1 $2 $3" = "plugin pane open" ]; then
-  printf '%s\n' '{"result":{"plugin_pane":{"pane":{"tab_id":"w2:t8"}}}}'
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p8","tab_id":"w2:t8"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p9","tab_id":"w2:t8"}}}}'
+      ;;
+  esac
 else
   printf '%s\n' '{"result":{"type":"tab_renamed"}}'
 fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
 	path := filepath.Join(t.TempDir(), "file with spaces.go")
 	if err := os.WriteFile(path, []byte("package example\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -88,6 +96,51 @@ fi`)
 	}
 	if !strings.Contains(string(logged), "tab rename w2:t8 file with spaces.go") {
 		t.Fatalf("expected tab rename in log, got:\n%s", logged)
+	}
+	wantTree := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w2:p8 --direction right --no-focus"
+	if !strings.Contains(string(logged), wantTree) {
+		t.Fatalf("new file tab should retain the right-side tree\nwant: %s\ngot:\n%s", wantTree, logged)
+	}
+}
+
+func TestOpenFileTabReusesExistingTabForSamePath(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p8","tab_id":"w2:t8"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p9","tab_id":"w2:t8"}}}}'
+      ;;
+  esac
+elif [ "$1 $2" = "tab get" ]; then
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t8","workspace_id":"w2"}}}'
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	path := filepath.Join(t.TempDir(), "same.go")
+	if err := os.WriteFile(path, []byte("package same\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := OpenFileTab("w2", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := OpenFileTab("w2", path); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(logged)
+	if count := strings.Count(got, "--entrypoint file"); count != 1 {
+		t.Fatalf("same file should create one file tab, got %d opens:\n%s", count, got)
+	}
+	if !strings.Contains(got, "tab get w2:t8") || !strings.Contains(got, "tab focus w2:t8") {
+		t.Fatalf("same file should validate and focus its existing tab:\n%s", got)
 	}
 }
 
