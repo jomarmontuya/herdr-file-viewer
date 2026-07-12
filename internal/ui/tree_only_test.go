@@ -3,11 +3,25 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestTreeOnlyRequestsNarrowRightSidebar(t *testing.T) {
+	got := treePaneResizeArgs("w1:p2")
+	want := []string{
+		"pane", "resize",
+		"--direction", "right",
+		"--amount", "0.2",
+		"--pane", "w1:p2",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrong tree-pane resize args\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
 
 func TestTreeOnlyRendersOnlyTheExplorer(t *testing.T) {
 	m, err := NewTree(fixtureRoot(t))
