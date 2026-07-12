@@ -31,12 +31,20 @@ func TestOpenFileTabArgsStayInWorkspace(t *testing.T) {
 		"--entrypoint", "file",
 		"--placement", "tab",
 		"--workspace", "w7",
-		"--cwd", filepath.Dir(path),
 		"--env", "HERDR_FILE_PATH=" + path,
 		"--focus",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("wrong Herdr args\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestOpenFileTabArgsDoNotOverridePluginWorkingDirectory(t *testing.T) {
+	got := openFileTabArgs("w7", "/tmp/project/internal/editor/editor.go")
+	for _, arg := range got {
+		if arg == "--cwd" {
+			t.Fatalf("file tab must keep the plugin-root cwd so ./bin/file-viewer resolves: %#v", got)
+		}
 	}
 }
 

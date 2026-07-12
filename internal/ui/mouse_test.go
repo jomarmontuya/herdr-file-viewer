@@ -82,7 +82,7 @@ fi
 		t.Fatal(err)
 	}
 	got := string(logged)
-	wantOpen := "plugin pane open --plugin medianeth.file-viewer --entrypoint file --placement tab --workspace w-test --cwd " + root + " --env HERDR_FILE_PATH=" + filepath.Join(root, "main.go") + " --focus"
+	wantOpen := "plugin pane open --plugin medianeth.file-viewer --entrypoint file --placement tab --workspace w-test --env HERDR_FILE_PATH=" + filepath.Join(root, "main.go") + " --focus"
 	if !strings.Contains(got, wantOpen) {
 		t.Fatalf("file click opened wrong tab\nwant args containing: %s\ngot:\n%s", wantOpen, got)
 	}
