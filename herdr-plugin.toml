@@ -1,6 +1,6 @@
 id = "medianeth.file-viewer"
 name = "File Tree"
-version = "0.4.0"
+version = "0.5.0"
 min_herdr_version = "0.7.0"
 description = "Clickable project file tree that opens files in Herdr workspace tabs."
 platforms = ["linux", "macos"]
@@ -9,6 +9,12 @@ platforms = ["linux", "macos"]
 # replaced by an older upstream release binary. Requires Go 1.25+.
 [[build]]
 command = ["sh", "scripts/fetch-or-build.sh"]
+
+# Make every newly-created project start as CLI + right-side file tree. The
+# hook waits for Herdr's initial pane and attaches the tree without taking focus.
+[[events]]
+on = "workspace.created"
+command = ["./bin/file-viewer", "--workspace-created"]
 
 # The pane that hosts the project file tree. The command path is resolved
 # relative to the plugin root; `placement` is the default if the open request

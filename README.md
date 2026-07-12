@@ -206,6 +206,10 @@ herdr plugin link "$PWD"
 
 ## Opening the viewer
 
+New Herdr projects automatically open with their normal CLI pane on the left
+and the narrow file tree on the right. The tree does not steal focus. Existing
+projects can still open or restore the same layout through the actions below.
+
 The manifest exposes two actions in Herdr's action menu:
 **Open File Tree** / **Open File Tree (tab)**. This fork's plugin pane renders
 only the expandable file tree; clicking a file opens it in a real Herdr tab.

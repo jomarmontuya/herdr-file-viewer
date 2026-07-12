@@ -19,6 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/filetab"
+	herdrbridge "github.com/ismaelosuna7824/herdr-file-viewer/internal/herdr"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/ui"
 )
 
@@ -26,6 +27,14 @@ import (
 var version = "dev"
 
 func main() {
+	if hasArg("--workspace-created") {
+		if err := herdrbridge.EnsureWorkspaceTree(workspaceIDFromEvent()); err != nil {
+			fmt.Fprintln(os.Stderr, "file-viewer:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	ui.SetVersion(version)
 
 	model, err := newModel()
@@ -53,7 +62,7 @@ func newModel() (tea.Model, error) {
 
 func resolveRoot() string {
 	for _, arg := range os.Args[1:] {
-		if arg != "" && arg != "--tree-only" {
+		if arg != "" && arg != "--tree-only" && arg != "--workspace-created" {
 			return arg
 		}
 	}
@@ -61,6 +70,38 @@ func resolveRoot() string {
 		return p
 	}
 	return "."
+}
+
+func workspaceIDFromEvent() string {
+	if workspaceID := os.Getenv("HERDR_WORKSPACE_ID"); workspaceID != "" {
+		return workspaceID
+	}
+	var payload struct {
+		WorkspaceID string `json:"workspace_id"`
+		Workspace   struct {
+			WorkspaceID string `json:"workspace_id"`
+		} `json:"workspace"`
+		Data struct {
+			WorkspaceID string `json:"workspace_id"`
+			Workspace   struct {
+				WorkspaceID string `json:"workspace_id"`
+			} `json:"workspace"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(os.Getenv("HERDR_PLUGIN_EVENT_JSON")), &payload); err != nil {
+		return ""
+	}
+	for _, workspaceID := range []string{
+		payload.WorkspaceID,
+		payload.Workspace.WorkspaceID,
+		payload.Data.WorkspaceID,
+		payload.Data.Workspace.WorkspaceID,
+	} {
+		if workspaceID != "" {
+			return workspaceID
+		}
+	}
+	return ""
 }
 
 func hasArg(want string) bool {
