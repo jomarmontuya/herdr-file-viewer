@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -68,5 +69,52 @@ fi`)
 func TestEnsureWorkspaceTreeRejectsMissingWorkspace(t *testing.T) {
 	if err := EnsureWorkspaceTree(""); err == nil || !strings.Contains(err.Error(), "workspace ID") {
 		t.Fatalf("expected missing workspace error, got %v", err)
+	}
+}
+
+func TestEnsureWorkspaceTreeSerializesDuplicateDelivery(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "pane list" ]; then
+  if [ -f "$HERDR_TEST_TREE_MARKER" ]; then
+    printf '%s\n' '{"result":{"panes":[{"pane_id":"w7:p1","tab_id":"w7:t1","workspace_id":"w7","cwd":"/tmp/project"},{"pane_id":"w7:p2","tab_id":"w7:t1","workspace_id":"w7","label":"File Tree","cwd":"/tmp/project"}]}}'
+  else
+    sleep 0.1
+    printf '%s\n' '{"result":{"panes":[{"pane_id":"w7:p1","tab_id":"w7:t1","workspace_id":"w7","cwd":"/tmp/project"}]}}'
+  fi
+elif [ "$1 $2 $3" = "plugin pane open" ]; then
+  : > "$HERDR_TEST_TREE_MARKER"
+  printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w7:p2","tab_id":"w7:t1"}}}}'
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	t.Setenv("HERDR_TEST_TREE_MARKER", filepath.Join(t.TempDir(), "tree-opened"))
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- EnsureWorkspaceTree("w7")
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(string(logged), "plugin pane open"); count != 1 {
+		t.Fatalf("duplicate delivery opened %d trees:\n%s", count, logged)
 	}
 }
