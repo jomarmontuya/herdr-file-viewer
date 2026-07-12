@@ -25,6 +25,31 @@ func TestResolveRootSkipsTreeOnlyFlag(t *testing.T) {
 	}
 }
 
+func TestResolveRootPrefersExplicitTreeRootOverFocusedFileContext(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "scripts")
+	if err := os.Mkdir(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contextJSON, err := json.Marshal(map[string]string{
+		"workspace_cwd":    nested,
+		"focused_pane_cwd": nested,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_TREE_ROOT", root)
+	t.Setenv("HERDR_PLUGIN_CONTEXT_JSON", string(contextJSON))
+
+	oldArgs := os.Args
+	os.Args = []string{filepath.Join(root, "file-viewer"), "--tree-only"}
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	if got := resolveRoot(); got != root {
+		t.Fatalf("file-tab tree must stay at project root: got %q, want %q", got, root)
+	}
+}
+
 func TestWorkspaceIDFromEventPrefersInjectedContext(t *testing.T) {
 	t.Setenv("HERDR_WORKSPACE_ID", "w12")
 	t.Setenv("HERDR_PLUGIN_EVENT_JSON", `{"data":{"workspace":{"workspace_id":"wrong"}}}`)

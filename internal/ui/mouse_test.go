@@ -86,6 +86,10 @@ fi
 	if !strings.Contains(got, wantOpen) {
 		t.Fatalf("file click opened wrong tab\nwant args containing: %s\ngot:\n%s", wantOpen, got)
 	}
+	wantTree := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w-test:p9 --env HERDR_TREE_ROOT=" + root + " --direction right --no-focus"
+	if !strings.Contains(got, wantTree) {
+		t.Fatalf("file tab tree must stay rooted at the project\nwant args containing: %s\ngot:\n%s", wantTree, got)
+	}
 	if !strings.Contains(got, "tab rename w-test:t2 main.go") {
 		t.Fatalf("new Herdr tab should be named after the file; got:\n%s", got)
 	}
