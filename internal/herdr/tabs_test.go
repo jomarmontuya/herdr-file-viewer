@@ -127,7 +127,7 @@ if [ "$1 $2 $3" = "plugin pane open" ]; then
       ;;
   esac
 elif [ "$1 $2" = "tab get" ]; then
-  printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t8","workspace_id":"w2"}}}'
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t8","workspace_id":"w2","label":"same.go","pane_count":2}}}'
 else
   printf '%s\n' '{"result":{"type":"ok"}}'
 fi`)
@@ -153,6 +153,51 @@ fi`)
 	}
 	if !strings.Contains(got, "tab get w2:t8") || !strings.Contains(got, "tab focus w2:t8") {
 		t.Fatalf("same file should validate and focus its existing tab:\n%s", got)
+	}
+}
+
+func TestOpenFileTabReplacesMismatchedLiveTabRecord(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "tab get" ]; then
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t-wrong","workspace_id":"w2","label":"other.go","pane_count":2}}}'
+elif [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-new","tab_id":"w2:t-new"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-tree","tab_id":"w2:t-new"}}}}'
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	stateDir := t.TempDir()
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	path := filepath.Join(t.TempDir(), "wanted.go")
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newFileTabState()
+	state.set("w2", abs, "w2:t-wrong")
+	if err := saveFileTabState(filepath.Join(stateDir, fileTabStateFile), state); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := OpenFileTab("w2", path); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(logged)
+	if strings.Contains(got, "tab focus w2:t-wrong") {
+		t.Fatalf("mismatched record must not focus unrelated live tab:\n%s", got)
+	}
+	if strings.Count(got, "--entrypoint file") != 1 {
+		t.Fatalf("mismatched record should be replaced with a fresh file tab:\n%s", got)
 	}
 }
 
@@ -301,4 +346,34 @@ fi`)
 			t.Fatalf("expected rename stderr, got %v", err)
 		}
 	})
+}
+
+func TestOpenFileTabRollsBackWhenTreeAttachmentFails(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p8","tab_id":"w2:t8"}}}}'
+      ;;
+    *)
+      printf '%s\n' 'tree failed' >&2
+      exit 8
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+
+	err := OpenFileTab("w2", "/tmp/example.go")
+	if err == nil || !strings.Contains(err.Error(), "tree failed") {
+		t.Fatalf("expected tree attachment failure, got %v", err)
+	}
+	logged, readErr := os.ReadFile(logPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(logged), "tab close w2:t8") {
+		t.Fatalf("failed file tab must be rolled back:\n%s", logged)
+	}
 }
