@@ -13,6 +13,7 @@ package ui
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -73,11 +74,12 @@ const explorerWidth = 34
 
 // Model is the root application state.
 type Model struct {
-	root   string
-	width  int
-	height int
-	ready  bool
-	st     styles
+	root     string
+	width    int
+	height   int
+	ready    bool
+	treeOnly bool
+	st       styles
 
 	mode   mode
 	bfocus browseFocus
@@ -174,8 +176,18 @@ type searchResultMsg struct {
 	err error
 }
 
-// New constructs the application rooted at the given directory.
+// New constructs the full application rooted at the given directory.
 func New(root string) (Model, error) {
+	return newModel(root, false)
+}
+
+// NewTree constructs a lightweight tree-only application. Files still open in
+// real Herdr tabs, but the preview, search, and git panels remain disabled.
+func NewTree(root string) (Model, error) {
+	return newModel(root, true)
+}
+
+func newModel(root string, treeOnly bool) (Model, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return Model{}, err
@@ -186,6 +198,7 @@ func New(root string) (Model, error) {
 	}
 	return Model{
 		root:        abs,
+		treeOnly:    treeOnly,
 		st:          newStyles(),
 		tree:        tree,
 		viewer:      viewer.New(),
@@ -197,11 +210,41 @@ func New(root string) (Model, error) {
 	}, nil
 }
 
-// Init kicks off the background file index, git status scan, and git log load.
+// Init starts only tree refresh and best-effort sidebar sizing in tree-only
+// mode. The full UI also loads its file, git, and update data.
 func (m Model) Init() tea.Cmd {
+	if m.treeOnly {
+		return tea.Batch(resizeTreePaneCmd(), tickCmd())
+	}
 	return tea.Batch(loadFilesCmd(m.root), loadGitStatusCmd(m.root),
 		loadGitLogCmd(m.root), loadBranchesCmd(m.root), loadChangesCmd(m.root),
 		checkUpdateCmd(), tickCmd())
+}
+
+func treePaneResizeArgs(paneID string) []string {
+	return []string{
+		"pane", "resize",
+		"--direction", "right",
+		"--amount", "0.2",
+		"--pane", paneID,
+	}
+}
+
+func resizeTreePaneCmd() tea.Cmd {
+	paneID := os.Getenv("HERDR_PANE_ID")
+	if paneID == "" {
+		return nil
+	}
+	bin := os.Getenv("HERDR_BIN_PATH")
+	if bin == "" {
+		bin = "herdr"
+	}
+	return func() tea.Msg {
+		// Resizing can fail for a full-tab pane or a split without a neighbour.
+		// Tree startup must remain usable in both cases.
+		_ = exec.Command(bin, treePaneResizeArgs(paneID)...).Run()
+		return nil
+	}
 }
 
 // --- commands ---------------------------------------------------------------
@@ -328,7 +371,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.ready = true
-		m.layout()
+		if !m.treeOnly {
+			m.layout()
+		}
 		return m, nil
 
 	case filesLoadedMsg:
@@ -415,6 +460,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Live refresh: re-read the tree from disk and reload git/file signals,
 		// then schedule the next tick.
 		m.tree.Refresh()
+		if m.treeOnly {
+			return m, tickCmd()
+		}
 		return m, tea.Batch(autoRefreshCmd(m.root), tickCmd())
 
 	case tea.KeyMsg:
@@ -436,9 +484,17 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 		return m.forwardToActive(msg)
 	}
-	topH, _, _, _ := m.browseDims()
+	topH := m.height - 2
+	clickWidth := m.width
+	if !m.treeOnly {
+		topH, _, _, _ = m.browseDims()
+		clickWidth = explorerWidth
+	}
+	if topH < 1 {
+		topH = 1
+	}
 	row := msg.Y - 1 // terminal row 0 is the app header
-	if msg.X < 0 || msg.X >= explorerWidth || row < 0 || row >= topH {
+	if msg.X < 0 || msg.X >= clickWidth || row < 0 || row >= topH {
 		return m.forwardToActive(msg)
 	}
 	nodes := m.tree.Visible()
@@ -456,16 +512,15 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.tree.Toggle()
 		return m, nil
 	}
-	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
-	path := n.Path
-	return m, func() tea.Msg {
-		return fileTabOpenedMsg{err: herdr.OpenFileTab(workspaceID, path)}
-	}
+	return m, m.openSelectedFileTab()
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyCtrlC {
 		return m, tea.Quit
+	}
+	if m.treeOnly {
+		return m.handleTreeKey(msg)
 	}
 	// Overlays take priority over everything else.
 	if m.pickerActive {
@@ -485,6 +540,44 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		return m.handleBrowseKey(msg)
+	}
+}
+
+func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q":
+		return m, tea.Quit
+	case "r":
+		m.tree.Refresh()
+	case "up", "k":
+		m.tree.MoveUp()
+	case "down", "j":
+		m.tree.MoveDown()
+	case "left", "h":
+		if n := m.tree.Selected(); n != nil && n.IsDir && n.Expanded {
+			m.tree.Toggle()
+		}
+	case "right", "l", "enter", " ":
+		if n := m.tree.Selected(); n != nil {
+			if n.IsDir {
+				m.tree.Toggle()
+			} else {
+				return m, m.openSelectedFileTab()
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m Model) openSelectedFileTab() tea.Cmd {
+	n := m.tree.Selected()
+	if n == nil || n.IsDir {
+		return nil
+	}
+	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
+	path := n.Path
+	return func() tea.Msg {
+		return fileTabOpenedMsg{err: herdr.OpenFileTab(workspaceID, path)}
 	}
 }
 
@@ -1248,6 +1341,9 @@ func (m Model) View() string {
 	if !m.ready {
 		return "loading…"
 	}
+	if m.treeOnly {
+		return m.viewTree()
+	}
 	if m.pickerActive {
 		return m.viewPicker()
 	}
@@ -1265,6 +1361,18 @@ func (m Model) View() string {
 	default:
 		return m.viewBrowse()
 	}
+}
+
+func (m Model) viewTree() string {
+	bodyH := m.height - 2
+	if bodyH < 1 {
+		bodyH = 1
+	}
+	help := "↑↓/jk move · ←→/hl expand · enter open · r refresh · q quit"
+	if m.statusNote != "" {
+		help = m.statusNote
+	}
+	return m.frame(m.renderExplorer(m.width, bodyH), help)
 }
 
 // viewPrompt renders the centered text-input overlay for new-branch / commit.
@@ -1469,6 +1577,9 @@ func (m Model) frame(body, help string) string {
 
 func (m Model) headerText() string {
 	name := filepath.Base(m.root)
+	if m.treeOnly {
+		return "  File Tree — " + name
+	}
 	branch := ""
 	if m.git.Branch != "" {
 		branch = "  ⎇ " + m.git.Branch

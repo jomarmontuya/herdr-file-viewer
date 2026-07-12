@@ -23,6 +23,36 @@ func TestTreeOnlyRequestsNarrowRightSidebar(t *testing.T) {
 	}
 }
 
+func TestTreeOnlyResizeCommandUsesHerdrPaneContext(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "resize.log")
+	fakeHerdr := filepath.Join(t.TempDir(), "herdr")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > \"$HERDR_TEST_LOG\"\n"
+	if err := os.WriteFile(fakeHerdr, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_BIN_PATH", fakeHerdr)
+	t.Setenv("HERDR_PANE_ID", "w9:p4")
+	t.Setenv("HERDR_TEST_LOG", logPath)
+
+	cmd := resizeTreePaneCmd()
+	if cmd == nil {
+		t.Fatal("tree pane with Herdr context should request a resize")
+	}
+	_ = cmd()
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(logged)), "pane resize --direction right --amount 0.2 --pane w9:p4"; got != want {
+		t.Fatalf("wrong resize command: got %q, want %q", got, want)
+	}
+
+	t.Setenv("HERDR_PANE_ID", "")
+	if cmd := resizeTreePaneCmd(); cmd != nil {
+		t.Fatal("tree pane outside Herdr should not request a resize")
+	}
+}
+
 func TestTreeOnlyRendersOnlyTheExplorer(t *testing.T) {
 	m, err := NewTree(fixtureRoot(t))
 	if err != nil {
@@ -93,5 +123,50 @@ fi
 	}
 	if !strings.Contains(string(logged), "HERDR_FILE_PATH="+filepath.Join(root, "main.go")) {
 		t.Fatalf("tree-only click opened wrong file:\n%s", logged)
+	}
+}
+
+func TestTreeOnlyKeyboardNavigationAndOpen(t *testing.T) {
+	m, err := NewTree(fixtureRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.ready = true
+	m.width, m.height = 60, 24
+
+	// Root starts expanded. Collapse and re-expand it, then move to main.go.
+	next, _ := m.handleTreeKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m = next.(Model)
+	if m.tree.Selected() == nil || m.tree.Selected().Expanded {
+		t.Fatal("left should collapse the selected root")
+	}
+	next, _ = m.handleTreeKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(Model)
+	if !m.tree.Selected().Expanded {
+		t.Fatal("right should expand the selected root")
+	}
+	for range 3 {
+		next, _ = m.handleTreeKey(tea.KeyMsg{Type: tea.KeyDown})
+		m = next.(Model)
+	}
+	if n := m.tree.Selected(); n == nil || n.Name != "main.go" {
+		t.Fatalf("keyboard should select main.go, got %+v", n)
+	}
+	_, cmd := m.handleTreeKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter on a file should open a Herdr tab")
+	}
+
+	next, _ = m.handleTreeKey(tea.KeyMsg{Type: tea.KeyUp})
+	m = next.(Model)
+	next, _ = m.handleTreeKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = next.(Model)
+	m.statusNote = "file tab failed: test"
+	if !strings.Contains(m.View(), m.statusNote) {
+		t.Fatal("tree-only view should surface file-tab errors")
+	}
+	_, quit := m.handleTreeKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if quit == nil {
+		t.Fatal("q should close the tree pane")
 	}
 }

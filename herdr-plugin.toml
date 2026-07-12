@@ -1,8 +1,8 @@
 id = "medianeth.file-viewer"
-name = "File Viewer"
-version = "0.2.0"
+name = "File Tree"
+version = "0.3.0"
 min_herdr_version = "0.7.0"
-description = "File explorer, code viewer (syntax + markdown), fuzzy finder, content search and a full git client — in one Herdr pane."
+description = "Clickable project file tree that opens files in Herdr workspace tabs."
 platforms = ["linux", "macos"]
 
 # Build this fork from source so its mouse and file-tab behavior cannot be
@@ -10,14 +10,14 @@ platforms = ["linux", "macos"]
 [[build]]
 command = ["sh", "scripts/fetch-or-build.sh"]
 
-# The pane that hosts the full-screen viewer. The command path is resolved
+# The pane that hosts the project file tree. The command path is resolved
 # relative to the plugin root; `placement` is the default if the open request
 # doesn't override it.
 [[panes]]
 id = "viewer"
-title = "File Viewer"
+title = "File Tree"
 placement = "split"
-command = ["./bin/file-viewer"]
+command = ["./bin/file-viewer", "--tree-only"]
 
 # Read-only file content opened as a workspace tab by explorer clicks. The
 # selected path is injected through HERDR_FILE_PATH by the pane-open command.
@@ -27,25 +27,25 @@ title = "File"
 placement = "tab"
 command = ["./bin/file-viewer"]
 
-# User-invokable action that opens the viewer pane. Herdr has no declarative
+# User-invokable action that opens the tree pane. Herdr has no declarative
 # "open this pane" field on actions, so this shells out to the Herdr CLI
 # (exposed via HERDR_BIN_PATH) with the verified pane-open flags: --plugin +
 # --entrypoint select the pane, and it opens as a focused split on the right.
-# Open the viewer pane. We deliberately do NOT pass --cwd: Herdr opens a plugin
+# Open the tree pane. We deliberately do NOT pass --cwd: Herdr opens a plugin
 # pane in the active workspace's directory by default, which is what we want.
 [[actions]]
 id = "open"
-title = "Open File Viewer"
+title = "Open File Tree"
 contexts = ["workspace"]
 command = [
   "sh", "-c",
   "\"${HERDR_BIN_PATH:-herdr}\" plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --direction right --focus",
 ]
 
-# Same viewer, opened in its own tab instead of a side split.
+# Same tree, opened in its own tab instead of a side split.
 [[actions]]
 id = "open-tab"
-title = "Open File Viewer (tab)"
+title = "Open File Tree (tab)"
 contexts = ["workspace"]
 command = [
   "sh", "-c",

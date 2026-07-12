@@ -45,17 +45,31 @@ func newModel() (tea.Model, error) {
 	if path := os.Getenv("HERDR_FILE_PATH"); path != "" {
 		return filetab.New(path)
 	}
+	if hasArg("--tree-only") {
+		return ui.NewTree(resolveRoot())
+	}
 	return ui.New(resolveRoot())
 }
 
 func resolveRoot() string {
-	if len(os.Args) > 1 && os.Args[1] != "" {
-		return os.Args[1]
+	for _, arg := range os.Args[1:] {
+		if arg != "" && arg != "--tree-only" {
+			return arg
+		}
 	}
 	if p := workspacePathFromContext(); p != "" {
 		return p
 	}
 	return "."
+}
+
+func hasArg(want string) bool {
+	for _, arg := range os.Args[1:] {
+		if arg == want {
+			return true
+		}
+	}
+	return false
 }
 
 // workspacePathFromContext extracts the active workspace's directory from

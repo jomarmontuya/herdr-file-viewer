@@ -1,25 +1,26 @@
-# File Viewer — a Herdr plugin
+# File Tree — a Herdr plugin
 
 [![build](https://github.com/ismaelosuna7824/herdr-file-viewer/actions/workflows/build.yml/badge.svg)](https://github.com/ismaelosuna7824/herdr-file-viewer/actions/workflows/build.yml)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![herdr-plugin](https://img.shields.io/badge/herdr--plugin-✓-8b5cf6)
 
-A fast, keyboard-driven **file explorer, code viewer and full git client** in a
-single [Herdr](https://herdr.dev) pane — written in Go with
-[Bubble Tea](https://github.com/charmbracelet/bubbletea). Think a tiny mash-up of
-a VS Code file tree, a fuzzy finder, ripgrep-style search, and lazygit — all in
-the terminal.
+A lightweight, mouse-enabled **project file tree** for
+[Herdr](https://herdr.dev), written in Go with
+[Bubble Tea](https://github.com/charmbracelet/bubbletea). The default plugin
+pane is a narrow right sidebar: folders expand in place and files open as real
+Herdr tabs. Preview, search, and git panels are not started in this mode.
 
 This MediaNet fork builds on
 [ismaelosuna7824/herdr-file-viewer](https://github.com/ismaelosuna7824/herdr-file-viewer)
-and keeps its MIT license and upstream attribution. It adds mouse-driven file
-tabs and uses the plugin ID `medianeth.file-viewer`.
+and keeps its MIT license and upstream attribution. The original full viewer
+code remains available without `--tree-only`; the linked plugin uses the lean
+tree mode and the plugin ID `medianeth.file-viewer`.
 
-## Preview
+## Retained full-viewer preview
 
-The four-panel browse screen — file tree + code view on top, the search panel
-and the git panel docked below:
+The upstream-style four-panel mode remains available for direct use, but is not
+the default Herdr plugin pane:
 
 ![File Viewer running in a Herdr pane](docs/screenshots/browse.png)
 
@@ -206,7 +207,10 @@ herdr plugin link "$PWD"
 ## Opening the viewer
 
 The manifest exposes two actions in Herdr's action menu:
-**Open File Viewer** / **Open File Viewer (tab)**.
+**Open File Tree** / **Open File Tree (tab)**. This fork's plugin pane renders
+only the expandable file tree; clicking a file opens it in a real Herdr tab.
+The full upstream-style viewer remains available from the binary without the
+`--tree-only` flag.
 
 ### Custom keybindings
 
