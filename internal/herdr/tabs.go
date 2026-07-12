@@ -52,7 +52,6 @@ func openFileTabArgs(workspaceID, path string) []string {
 		"--entrypoint", "file",
 		"--placement", "tab",
 		"--workspace", workspaceID,
-		"--cwd", filepath.Dir(path),
 		"--env", "HERDR_FILE_PATH=" + path,
 		"--focus",
 	}
