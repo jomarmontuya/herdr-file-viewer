@@ -48,7 +48,7 @@ func EnsureWorkspaceTree(workspaceID string) error {
 			}
 		}
 		if targetPaneID != "" {
-			out, err = exec.Command(bin, openWorkspaceTreeArgs(workspaceID, targetPaneID)...).CombinedOutput()
+			out, err = exec.Command(bin, openWorkspaceTreeArgs(targetPaneID)...).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("attach default Herdr file tree: %w: %s", err, out)
 			}
@@ -61,13 +61,12 @@ func EnsureWorkspaceTree(workspaceID string) error {
 	return errors.New("new Herdr workspace did not create an initial pane")
 }
 
-func openWorkspaceTreeArgs(workspaceID, targetPaneID string) []string {
+func openWorkspaceTreeArgs(targetPaneID string) []string {
 	return []string{
 		"plugin", "pane", "open",
 		"--plugin", pluginID,
 		"--entrypoint", "viewer",
 		"--placement", "split",
-		"--workspace", workspaceID,
 		"--target-pane", targetPaneID,
 		"--direction", "right",
 		"--no-focus",
