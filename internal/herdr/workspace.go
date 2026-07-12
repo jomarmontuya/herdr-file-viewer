@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sync"
 	"time"
 )
 
 const (
 	workspacePaneAttempts   = 40
 	workspacePaneRetryDelay = 50 * time.Millisecond
+	workspaceTreeLockFile   = ".workspace-tree.lock"
 )
+
+var workspaceTreeMu sync.Mutex
 
 // EnsureWorkspaceTree attaches one unfocused tree to the first pane created in
 // a workspace. workspace.created can arrive before its initial pane exists, so
@@ -20,6 +25,24 @@ func EnsureWorkspaceTree(workspaceID string) error {
 	if workspaceID == "" {
 		return errors.New("Herdr workspace ID is unavailable")
 	}
+	workspaceTreeMu.Lock()
+	defer workspaceTreeMu.Unlock()
+
+	if stateDir := os.Getenv("HERDR_PLUGIN_STATE_DIR"); stateDir != "" {
+		if err := os.MkdirAll(stateDir, 0o700); err != nil {
+			return fmt.Errorf("create Herdr workspace-tree state directory: %w", err)
+		}
+		lock, err := os.OpenFile(filepath.Join(stateDir, workspaceTreeLockFile), os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			return fmt.Errorf("open Herdr workspace-tree lock: %w", err)
+		}
+		defer lock.Close()
+		if err := lockFileExclusive(lock); err != nil {
+			return fmt.Errorf("lock Herdr workspace-tree hook: %w", err)
+		}
+		defer unlockFile(lock) //nolint:errcheck
+	}
+
 	bin := os.Getenv("HERDR_BIN_PATH")
 	if bin == "" {
 		bin = "herdr"
