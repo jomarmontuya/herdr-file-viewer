@@ -31,6 +31,7 @@ func TestOpenFileTabArgsStayInWorkspace(t *testing.T) {
 		"--entrypoint", "file",
 		"--placement", "tab",
 		"--workspace", "w7",
+		"--cwd", filepath.Dir(path),
 		"--env", "HERDR_FILE_PATH=" + path,
 		"--focus",
 	}
@@ -39,13 +40,16 @@ func TestOpenFileTabArgsStayInWorkspace(t *testing.T) {
 	}
 }
 
-func TestOpenFileTabArgsDoNotOverridePluginWorkingDirectory(t *testing.T) {
-	got := openFileTabArgs("w7", "/tmp/project/internal/editor/editor.go")
-	for _, arg := range got {
-		if arg == "--cwd" {
-			t.Fatalf("file tab must keep the plugin-root cwd so ./bin/file-viewer resolves: %#v", got)
+func TestOpenFileTabArgsUseFileDirectoryAsOwnershipMarker(t *testing.T) {
+	path := "/tmp/project/internal/editor/editor.go"
+	got := openFileTabArgs("w7", path)
+	want := []string{"--cwd", filepath.Dir(path)}
+	for i := range got[:len(got)-1] {
+		if reflect.DeepEqual(got[i:i+2], want) {
+			return
 		}
 	}
+	t.Fatalf("file tab must launch in its file directory: %#v", got)
 }
 
 func TestParseOpenedTabID(t *testing.T) {
@@ -128,6 +132,8 @@ if [ "$1 $2 $3" = "plugin pane open" ]; then
   esac
 elif [ "$1 $2" = "tab get" ]; then
   printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t8","workspace_id":"w2","label":"same.go","pane_count":2}}}'
+elif [ "$1 $2" = "pane list" ]; then
+  printf '{"result":{"panes":[{"pane_id":"w2:p8","tab_id":"w2:t8","workspace_id":"w2","label":"File","cwd":"%s"}]}}\n' "$HERDR_TEST_FILE_DIR"
 else
   printf '%s\n' '{"result":{"type":"ok"}}'
 fi`)
@@ -136,6 +142,7 @@ fi`)
 	if err := os.WriteFile(path, []byte("package same\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("HERDR_TEST_FILE_DIR", filepath.Dir(path))
 
 	if err := OpenFileTab("w2", path); err != nil {
 		t.Fatal(err)
@@ -159,7 +166,9 @@ fi`)
 func TestOpenFileTabReplacesMismatchedLiveTabRecord(t *testing.T) {
 	_, logPath := fakeHerdr(t, `
 if [ "$1 $2" = "tab get" ]; then
-  printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t-wrong","workspace_id":"w2","label":"other.go","pane_count":2}}}'
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t-wrong","workspace_id":"w2","label":"main.go","pane_count":2}}}'
+elif [ "$1 $2" = "pane list" ]; then
+  printf '{"result":{"panes":[{"pane_id":"w2:p-wrong","tab_id":"w2:t-wrong","workspace_id":"w2","label":"File","cwd":"%s"}]}}\n' "$HERDR_TEST_OTHER_DIR"
 elif [ "$1 $2 $3" = "plugin pane open" ]; then
   case "$*" in
     *"--entrypoint file"*)
@@ -174,7 +183,9 @@ else
 fi`)
 	stateDir := t.TempDir()
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
-	path := filepath.Join(t.TempDir(), "wanted.go")
+	path := filepath.Join(t.TempDir(), "main.go")
+	otherDir := t.TempDir()
+	t.Setenv("HERDR_TEST_OTHER_DIR", otherDir)
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		t.Fatal(err)
