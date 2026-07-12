@@ -113,6 +113,9 @@ func tabIsReusable(bin, tabID, workspaceID, path string) bool {
 		got.Label != filepath.Base(path) || got.PaneCount < 2 {
 		return false
 	}
+	if !tabHasOwnedFilePane(bin, workspaceID, tabID, path) {
+		return false
+	}
 	return exec.Command(bin, "tab", "focus", tabID).Run() == nil
 }
 
@@ -123,6 +126,7 @@ func openFileTabArgs(workspaceID, path string) []string {
 		"--entrypoint", "file",
 		"--placement", "tab",
 		"--workspace", workspaceID,
+		"--cwd", filepath.Dir(path),
 		"--env", "HERDR_FILE_PATH=" + path,
 		"--focus",
 	}
@@ -200,6 +204,61 @@ func parseTabContext(raw []byte) (tabContext, error) {
 		return tabContext{}, errors.New("Herdr tab response is incomplete")
 	}
 	return got, nil
+}
+
+type paneContext struct {
+	PaneID      string
+	TabID       string
+	WorkspaceID string
+	Label       string
+	Cwd         string
+}
+
+func tabHasOwnedFilePane(bin, workspaceID, tabID, path string) bool {
+	out, err := exec.Command(bin, "pane", "list", "--workspace", workspaceID).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	panes, err := parsePaneList(out)
+	if err != nil {
+		return false
+	}
+	wantDir := filepath.Clean(filepath.Dir(path))
+	for _, pane := range panes {
+		if pane.TabID == tabID && pane.WorkspaceID == workspaceID && pane.Label == "File" &&
+			filepath.Clean(pane.Cwd) == wantDir {
+			return true
+		}
+	}
+	return false
+}
+
+func parsePaneList(raw []byte) ([]paneContext, error) {
+	var response struct {
+		Result struct {
+			Panes []struct {
+				PaneID      string `json:"pane_id"`
+				TabID       string `json:"tab_id"`
+				WorkspaceID string `json:"workspace_id"`
+				Label       string `json:"label"`
+				Cwd         string `json:"cwd"`
+			} `json:"panes"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, err
+	}
+	panes := make([]paneContext, 0, len(response.Result.Panes))
+	for _, pane := range response.Result.Panes {
+		panes = append(panes, paneContext{
+			PaneID:      pane.PaneID,
+			TabID:       pane.TabID,
+			WorkspaceID: pane.WorkspaceID,
+			Label:       pane.Label,
+			Cwd:         pane.Cwd,
+		})
+	}
+	return panes, nil
 }
 
 func newFileTabState() fileTabState {

@@ -21,11 +21,15 @@ command = ["./bin/file-viewer", "--tree-only"]
 
 # Read-only file content opened as a workspace tab by explorer clicks. The
 # selected path is injected through HERDR_FILE_PATH by the pane-open command.
+# File panes launch in the selected file's directory so their cwd is an exact,
+# non-visual ownership marker for same-basename tab reuse. Resolve the binary
+# through Herdr's authoritative plugin-root environment variable so --cwd does
+# not break the executable path.
 [[panes]]
 id = "file"
 title = "File"
 placement = "tab"
-command = ["./bin/file-viewer"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/file-viewer\""]
 
 # User-invokable action that opens the tree pane. Herdr has no declarative
 # "open this pane" field on actions, so this shells out to the Herdr CLI
