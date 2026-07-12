@@ -18,6 +18,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/ismaelosuna7824/herdr-file-viewer/internal/filetab"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/ui"
 )
 
@@ -25,20 +26,26 @@ import (
 var version = "dev"
 
 func main() {
-	root := resolveRoot()
 	ui.SetVersion(version)
 
-	model, err := ui.New(root)
+	model, err := newModel()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "file-viewer:", err)
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "file-viewer:", err)
 		os.Exit(1)
 	}
+}
+
+func newModel() (tea.Model, error) {
+	if path := os.Getenv("HERDR_FILE_PATH"); path != "" {
+		return filetab.New(path)
+	}
+	return ui.New(resolveRoot())
 }
 
 func resolveRoot() string {

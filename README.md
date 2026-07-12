@@ -11,6 +11,11 @@ single [Herdr](https://herdr.dev) pane — written in Go with
 a VS Code file tree, a fuzzy finder, ripgrep-style search, and lazygit — all in
 the terminal.
 
+This MediaNet fork builds on
+[ismaelosuna7824/herdr-file-viewer](https://github.com/ismaelosuna7824/herdr-file-viewer)
+and keeps its MIT license and upstream attribution. It adds mouse-driven file
+tabs and uses the plugin ID `medianeth.file-viewer`.
+
 ## Preview
 
 The four-panel browse screen — file tree + code view on top, the search panel
@@ -27,7 +32,9 @@ Three things in one pane:
 
 - **File browser** — a navigable, lazily-expanded directory tree with **git
   status decorations**: modified, new, deleted and renamed files are colored and
-  badged, and directories containing changes are tinted (VS Code style).
+  badged, and directories containing changes are tinted (VS Code style). Click a
+  folder to toggle it; click a file to open a read-only tab in the same Herdr
+  workspace.
 - **Rendered markdown** — `.md` files display as formatted documents (headings,
   lists, code blocks) via glamour; press `m` to toggle to raw source.
 - **Persistent search panel** — always docked bottom-left. `Ctrl+P` focuses it in
@@ -172,36 +179,33 @@ aliases work on Linux/Windows.
 | `Ctrl+w` (`Alt+w`) | Whole word (`ab`) |
 | `Ctrl+r` (`Alt+r`) | Regular expression (`.*`) |
 
-## Install
+## Local install (this fork)
 
 ```sh
-herdr plugin install ismaelosuna7824/herdr-file-viewer
+cd /Users/jomar/Documents/Work/medianeth/herdr-file-viewer
+sh scripts/fetch-or-build.sh
+herdr plugin link /Users/jomar/Documents/Work/medianeth/herdr-file-viewer
 ```
 
-On install the `[[build]]` step **downloads a prebuilt binary** for your platform
-(macOS/Linux, amd64/arm64) from the GitHub release — **no Go required**. If a
-prebuilt binary isn't available it falls back to `go build` (needs Go 1.25+).
+The local link command does not run `[[build]]`, so build the binary first. This
+fork intentionally builds from source with Go 1.25+; using the upstream release
+binary would omit mouse-driven Herdr tabs.
 
-This repo is tagged with the `herdr-plugin` topic, so it also shows up in Herdr's
-plugin marketplace (`/plugins/`).
+The original plugin is available separately as
+`ismaelosuna7824/herdr-file-viewer`, but it does not include this fork's mouse
+or file-tab behavior.
 
 ### Local development
 
 ```sh
-git clone https://github.com/ismaelosuna7824/herdr-file-viewer
-herdr plugin link herdr-file-viewer
+go test ./...
+go build -o bin/file-viewer ./cmd/file-viewer
+herdr plugin link "$PWD"
 ```
 
 ## Opening the viewer
 
-The plugin ships with two default keybindings (declared in its manifest):
-
-| Keys | Opens |
-|------|-------|
-| `<prefix> f` | The viewer in a **split** beside your work |
-| `<prefix> Shift+f` | The viewer in **its own tab** |
-
-(`<prefix>` is your Herdr prefix key.) You can also run it from the action menu:
+The manifest exposes two actions in Herdr's action menu:
 **Open File Viewer** / **Open File Viewer (tab)**.
 
 ### Custom keybindings
@@ -212,18 +216,22 @@ plugin's actions (`open` = split, `open-tab` = tab):
 ```toml
 [[keys.command]]              # open beside your work (split)
 key = "prefix+f"
-type = "shell"
-command = "herdr plugin action invoke open --plugin ismaelosuna.file-viewer"
+type = "plugin_action"
+command = "medianeth.file-viewer.open"
 
 [[keys.command]]              # …or in its own tab
 key = "prefix+shift+f"
-type = "shell"
-command = "herdr plugin action invoke open-tab --plugin ismaelosuna.file-viewer"
+type = "plugin_action"
+command = "medianeth.file-viewer.open-tab"
 ```
 
 Swap `prefix+f` / `prefix+shift+f` for whatever keys you like. Reload Herdr (or
 your config) for the changes to take effect. Once open, press `?` for the full
 in-app keybinding reference.
+
+Herdr plugin panes belong to one tab. The right-side tree therefore stays in
+the CLI tab where you opened it; it cannot remain globally pinned while you
+switch to file tabs without a future native Herdr sidebar API.
 
 ## Editing files
 
@@ -247,7 +255,7 @@ $HERDR_PLUGIN_CONFIG_DIR/editors
 ```
 
 On macOS that's usually
-`~/.config/herdr/plugins/config/ismaelosuna.file-viewer/editors`. One editor per
+`~/.config/herdr/plugins/config/medianeth.file-viewer/editors`. One editor per
 line, `name = command`. A leading `*` marks the default; the file or project
 path is appended automatically, so **don't** add a trailing `.`:
 
@@ -303,11 +311,13 @@ back to the current working directory.
 cmd/file-viewer/   entrypoint — the binary Herdr launches in the pane
 internal/
   explorer/        navigable directory-tree model
+  filetab/         standalone read-only file-tab TUI
   finder/          fuzzy file-path matcher (right-to-left, basename-biased)
   search/          pure-Go content search engine + .gitignore matcher
   gitstatus/       git working-tree status (shells out to `git`)
   gitdiff/         parsed diff (file vs HEAD, or a whole commit) via `git`
   gitlog/          commit history + branch/git operations
+  herdr/           CLI bridge for opening and naming workspace tabs
   reveal/          open a path in the OS file manager (cross-platform)
   viewer/          read-only file content pane with line numbers
   ui/              Bubble Tea app that composes the above (Model-Update-View)

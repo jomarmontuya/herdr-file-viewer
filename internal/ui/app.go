@@ -12,6 +12,7 @@ package ui
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitdiff"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitlog"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitstatus"
+	"github.com/ismaelosuna7824/herdr-file-viewer/internal/herdr"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/reveal"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/search"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/update"
@@ -156,6 +158,8 @@ type updateMsg struct{ latest string }
 // editorClosedMsg fires when the external editor exits (err set if it failed to
 // launch, e.g. the command isn't on PATH).
 type editorClosedMsg struct{ err error }
+
+type fileTabOpenedMsg struct{ err error }
 
 // highlightMsg carries the result of asynchronous syntax highlighting.
 type highlightMsg struct {
@@ -385,6 +389,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmd, reloadGitCmd(m.root))
 
+	case fileTabOpenedMsg:
+		if msg.err != nil {
+			m.statusNote = "file tab failed: " + msg.err.Error()
+		}
+		return m, nil
+
 	case highlightMsg:
 		if msg.gen == m.highlightGen {
 			m.viewer.SetHighlighted(msg.path, msg.lines)
@@ -409,9 +419,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	}
 
 	return m.forwardToActive(msg)
+}
+
+// handleMouse maps a left click in the visible explorer region back to the
+// exact tree row. Directories toggle; files open as real Herdr tabs.
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if !m.ready || m.mode != modeBrowse || m.pickerActive || m.prompt != opNone || m.confirm != opNone {
+		return m, nil
+	}
+	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		return m.forwardToActive(msg)
+	}
+	topH, _, _, _ := m.browseDims()
+	row := msg.Y - 1 // terminal row 0 is the app header
+	if msg.X < 0 || msg.X >= explorerWidth || row < 0 || row >= topH {
+		return m.forwardToActive(msg)
+	}
+	nodes := m.tree.Visible()
+	index := scrollStart(m.tree.Cursor(), len(nodes), topH) + row
+	if index < 0 || index >= len(nodes) {
+		return m, nil
+	}
+	m.tree.SetCursor(index)
+	m.bfocus = focusExplorer
+	n := m.tree.Selected()
+	if n == nil {
+		return m, nil
+	}
+	if n.IsDir {
+		m.tree.Toggle()
+		return m, nil
+	}
+	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
+	path := n.Path
+	return m, func() tea.Msg {
+		return fileTabOpenedMsg{err: herdr.OpenFileTab(workspaceID, path)}
+	}
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

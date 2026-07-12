@@ -90,4 +90,3 @@ fi
 		t.Fatalf("new Herdr tab should be named after the file; got:\n%s", got)
 	}
 }
-
