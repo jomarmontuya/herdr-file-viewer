@@ -51,48 +51,66 @@ func OpenFileTab(workspaceID, path string) error {
 		bin = "herdr"
 	}
 	stateDir := os.Getenv("HERDR_PLUGIN_STATE_DIR")
-	if stateDir == "" {
-		return openNewFileTab(bin, workspaceID, abs, nil)
-	}
-	return withFileTabState(stateDir, func(state *fileTabState) error {
-		if tabID := state.tabID(workspaceID, abs); tabID != "" && tabIsReusable(bin, tabID, workspaceID) {
-			return nil
+	var openedTabID string
+	openOrReuse := func(state *fileTabState) error {
+		if state != nil {
+			if tabID := state.tabID(workspaceID, abs); tabID != "" && tabIsReusable(bin, tabID, workspaceID, abs) {
+				return nil
+			}
 		}
-		return openNewFileTab(bin, workspaceID, abs, state)
-	})
+		var openErr error
+		openedTabID, openErr = openNewFileTab(bin, workspaceID, abs, state)
+		return openErr
+	}
+	if stateDir == "" {
+		err = openOrReuse(nil)
+	} else {
+		err = withFileTabState(stateDir, openOrReuse)
+	}
+	// Cleanup stays outside withFileTabState: a successful pane open followed
+	// by an atomic state-save failure must roll the new tab back too.
+	if err != nil && openedTabID != "" {
+		closeTabBestEffort(bin, openedTabID)
+	}
+	return err
 }
 
-func openNewFileTab(bin, workspaceID, path string, state *fileTabState) error {
+func openNewFileTab(bin, workspaceID, path string, state *fileTabState) (string, error) {
 	out, err := exec.Command(bin, openFileTabArgs(workspaceID, path)...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("open Herdr file tab: %w: %s", err, out)
+		return "", fmt.Errorf("open Herdr file tab: %w: %s", err, out)
 	}
 	opened, err := parseOpenedPane(out)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if out, err = exec.Command(bin, "tab", "rename", opened.TabID, filepath.Base(path)).CombinedOutput(); err != nil {
-		return fmt.Errorf("rename Herdr file tab: %w: %s", err, out)
+		return opened.TabID, fmt.Errorf("rename Herdr file tab: %w: %s", err, out)
 	}
 	if opened.PaneID == "" {
-		return errors.New("Herdr pane response did not include a pane ID")
+		return opened.TabID, errors.New("Herdr pane response did not include a pane ID")
 	}
 	if out, err = exec.Command(bin, openTreeArgs(opened.PaneID)...).CombinedOutput(); err != nil {
-		return fmt.Errorf("attach Herdr file tree: %w: %s", err, out)
+		return opened.TabID, fmt.Errorf("attach Herdr file tree: %w: %s", err, out)
 	}
 	if state != nil {
 		state.set(workspaceID, path, opened.TabID)
 	}
-	return nil
+	return opened.TabID, nil
 }
 
-func tabIsReusable(bin, tabID, workspaceID string) bool {
+func closeTabBestEffort(bin, tabID string) {
+	_ = exec.Command(bin, "tab", "close", tabID).Run()
+}
+
+func tabIsReusable(bin, tabID, workspaceID, path string) bool {
 	out, err := exec.Command(bin, "tab", "get", tabID).CombinedOutput()
 	if err != nil {
 		return false
 	}
 	got, err := parseTabContext(out)
-	if err != nil || got.TabID != tabID || got.WorkspaceID != workspaceID {
+	if err != nil || got.TabID != tabID || got.WorkspaceID != workspaceID ||
+		got.Label != filepath.Base(path) || got.PaneCount < 2 {
 		return false
 	}
 	return exec.Command(bin, "tab", "focus", tabID).Run() == nil
@@ -154,6 +172,8 @@ func parseOpenedTabID(raw []byte) (string, error) {
 type tabContext struct {
 	TabID       string
 	WorkspaceID string
+	Label       string
+	PaneCount   int
 }
 
 func parseTabContext(raw []byte) (tabContext, error) {
@@ -162,6 +182,8 @@ func parseTabContext(raw []byte) (tabContext, error) {
 			Tab struct {
 				TabID       string `json:"tab_id"`
 				WorkspaceID string `json:"workspace_id"`
+				Label       string `json:"label"`
+				PaneCount   int    `json:"pane_count"`
 			} `json:"tab"`
 		} `json:"result"`
 	}
@@ -171,6 +193,8 @@ func parseTabContext(raw []byte) (tabContext, error) {
 	got := tabContext{
 		TabID:       response.Result.Tab.TabID,
 		WorkspaceID: response.Result.Tab.WorkspaceID,
+		Label:       response.Result.Tab.Label,
+		PaneCount:   response.Result.Tab.PaneCount,
 	}
 	if got.TabID == "" || got.WorkspaceID == "" {
 		return tabContext{}, errors.New("Herdr tab response is incomplete")

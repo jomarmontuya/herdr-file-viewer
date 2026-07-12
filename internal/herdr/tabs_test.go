@@ -377,3 +377,36 @@ fi`)
 		t.Fatalf("failed file tab must be rolled back:\n%s", logged)
 	}
 }
+
+func TestOpenFileTabRollsBackWhenStateSaveFails(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p8","tab_id":"w2:t8"}}}}'
+      ;;
+    *)
+      chmod 0500 "$HERDR_TEST_STATE_DIR"
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p9","tab_id":"w2:t8"}}}}'
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	stateDir := t.TempDir()
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	t.Setenv("HERDR_TEST_STATE_DIR", stateDir)
+	defer os.Chmod(stateDir, 0o700) //nolint:errcheck
+
+	err := OpenFileTab("w2", "/tmp/example.go")
+	if err == nil || !strings.Contains(err.Error(), "save Herdr file-tab state") {
+		t.Fatalf("expected state-save failure, got %v", err)
+	}
+	logged, readErr := os.ReadFile(logPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(logged), "tab close w2:t8") {
+		t.Fatalf("untracked file tab must be rolled back after state-save failure:\n%s", logged)
+	}
+}
