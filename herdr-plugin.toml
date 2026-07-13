@@ -32,7 +32,8 @@ title = "File Tree"
 placement = "split"
 command = ["./bin/file-viewer", "--tree-only"]
 
-# Read-only file content opened as a workspace tab by explorer clicks. The
+# File content opened as a workspace tab by explorer clicks. Tabs open in
+# viewer mode first, then can switch into the in-pane editor with `e`. The
 # selected path is injected through HERDR_FILE_PATH by the pane-open command.
 # File panes launch in the selected file's directory so their cwd is an exact,
 # non-visual ownership marker for same-basename tab reuse. Resolve the binary
