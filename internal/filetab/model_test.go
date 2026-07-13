@@ -191,3 +191,30 @@ func TestFileTabEditModeRejectsUneditableFiles(t *testing.T) {
 		t.Fatalf("uneditable file should explain why edit mode did not open:\n%s", tab.View())
 	}
 }
+
+func TestFileTabEditModeRoutesKeyboardSelectionIntoSavedContent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(path, []byte("old value\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 10})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	for range 3 {
+		model, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	}
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("new")})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new value\n" {
+		t.Fatalf("saved content = %q, want keyboard-selected text replaced", got)
+	}
+}
