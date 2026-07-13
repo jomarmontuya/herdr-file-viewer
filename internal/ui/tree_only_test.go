@@ -208,3 +208,32 @@ func TestTreeOnlyPersistsExpandedFoldersAndSelectionAcrossRestart(t *testing.T) 
 		t.Fatalf("expanded folder state was not restored: %+v", docs)
 	}
 }
+
+func TestTreeOnlyIgnoresCorruptOrDifferentRootState(t *testing.T) {
+	stateDir := t.TempDir()
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	t.Setenv("HERDR_WORKSPACE_ID", "w-state")
+	t.Setenv("HERDR_TAB_ID", "w-state:t-corrupt")
+	statePath := treeStatePathFromEnv()
+	if err := os.WriteFile(statePath, []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := fixtureRoot(t)
+	m, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.tree.Selected() != m.tree.Root {
+		t.Fatal("corrupt state should fall back to the default root selection")
+	}
+
+	otherRoot := fixtureRoot(t)
+	m.persistTreeState()
+	restored, err := NewTree(otherRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.tree.Selected() != restored.tree.Root {
+		t.Fatal("state saved for a different root must be ignored")
+	}
+}

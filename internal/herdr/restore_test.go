@@ -112,6 +112,50 @@ fi`)
 	}
 }
 
+func TestRestoreFocusedTabPrefersSavedRootTreeOverNestedEventContext(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(nested, "build.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_TEST_ROOT", root)
+	t.Setenv("HERDR_TEST_NESTED", nested)
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "pane list" ]; then
+  printf '{"result":{"panes":[{"pane_id":"w6:p-file","tab_id":"w6:t2","workspace_id":"w6","label":"File","cwd":"%s"},{"pane_id":"w6:p-root-tree","tab_id":"w6:t1","workspace_id":"w6","label":"File Tree","cwd":"%s"}]}}\n' "$HERDR_TEST_NESTED" "$HERDR_TEST_ROOT"
+elif [ "$1 $2" = "tab get" ]; then
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w6:t2","workspace_id":"w6","label":"build.sh","pane_count":1}}}'
+elif [ "$1 $2" = "pane process-info" ]; then
+  printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":42,"foreground_process_group_id":42,"foreground_processes":[{"name":"zsh","argv":["-zsh"]}]}}}\n' "$4"
+elif [ "$1 $2 $3" = "plugin pane open" ]; then
+  printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w6:p-tree","tab_id":"w6:t2"}}}}'
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	stateDir := t.TempDir()
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	t.Setenv("HERDR_PLUGIN_ROOT", "/tmp/plugin")
+
+	if err := RestoreFocusedTab("w6", "w6:t2", nested); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(logged)
+	if !strings.Contains(got, "HERDR_FILE_PATH="+path) {
+		t.Fatalf("legacy file path was not recovered from pane cwd and tab label:\n%s", got)
+	}
+	if !strings.Contains(got, "--env HERDR_TREE_ROOT="+root+" --direction") {
+		t.Fatalf("restored tree must use the existing project root, not nested event cwd:\n%s", got)
+	}
+}
+
 func TestRestoreFocusedTabRejectsMissingContext(t *testing.T) {
 	for name, ids := range map[string][2]string{
 		"workspace": {"", "w1:t1"},
