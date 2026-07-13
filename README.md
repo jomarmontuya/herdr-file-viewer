@@ -79,7 +79,7 @@ More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
 - **Right-side file tree by default** — new Herdr workspaces open with the normal
   CLI pane and a narrow file tree on the right.
 - **Clickable folders and files** — click a folder to expand/collapse it; click a
-  file to open it as a read-only Herdr tab.
+  file to open it as a Herdr file tab.
 - **Same-file tab reuse** — clicking the same absolute file path focuses its
   existing tab instead of creating duplicates.
 - **Per-tab right-side trees** — each file tab gets a tree on the right. When a
@@ -93,8 +93,8 @@ More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
   file's parent folder.
 - **Git decorations** — modified, untracked, staged, deleted, renamed and
   conflicted files get editor-style badges. Dirty directories are tinted.
-- **Read-only file tabs** — file tabs keep Herdr's native mouse drag selection
-  and clipboard behavior.
+- **Editable file tabs** — file tabs stay read-only by default for Herdr's native
+  mouse drag selection, then switch into a simple in-pane editor with `e`.
 - **Clickable URLs** — `http://` and `https://` URLs render as terminal
   hyperlinks, so modified-click opens them in the terminal/browser flow.
 - **Markdown source/render toggle** — `.md` tabs can toggle between rendered
@@ -191,6 +191,20 @@ red inside the panel — nothing silently fails.
 | `m` | Toggle rendered markdown ↔ source (markdown files only) |
 | `r` | Refresh git status and the file index (e.g. after a commit) |
 | `q` / `Ctrl+C` | Quit |
+
+### File tabs
+
+| Key | Action |
+|-----|--------|
+| `e` | Enter in-pane edit mode |
+| `Ctrl+S` | Save the edited file and return to viewer mode |
+| `Esc` | Cancel edit mode without writing changes |
+| `m` | Toggle rendered markdown ↔ source while in viewer mode |
+| `q` / `Ctrl+C` | Close the file tab while in viewer mode |
+
+File tabs intentionally open in viewer mode first. That keeps text selection,
+clipboard copying and terminal hyperlinks working like Herdr core until you
+explicitly press `e`.
 
 ### Review / diff view (`d`)
 
@@ -376,7 +390,7 @@ back to the current working directory.
 cmd/file-viewer/   entrypoint — the binary Herdr launches in the pane
 internal/
   explorer/        navigable directory-tree model
-  filetab/         standalone read-only file-tab TUI
+  filetab/         standalone file-tab TUI with viewer/edit modes
   finder/          fuzzy file-path matcher (right-to-left, basename-biased)
   search/          pure-Go content search engine + .gitignore matcher
   gitstatus/       git working-tree status (shells out to `git`)
@@ -384,7 +398,7 @@ internal/
   gitlog/          commit history + branch/git operations
   herdr/           CLI bridge for opening and naming workspace tabs
   reveal/          open a path in the OS file manager (cross-platform)
-  viewer/          read-only file content pane with line numbers
+  viewer/          file content pane with line numbers
   ui/              Bubble Tea app that composes the above (Model-Update-View)
 ```
 
