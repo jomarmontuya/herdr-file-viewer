@@ -1,6 +1,6 @@
 # File Tree — a Herdr plugin
 
-[![build](https://github.com/ismaelosuna7824/herdr-file-viewer/actions/workflows/build.yml/badge.svg)](https://github.com/ismaelosuna7824/herdr-file-viewer/actions/workflows/build.yml)
+[![build](https://github.com/jomarmontuya/herdr-file-viewer/actions/workflows/build.yml/badge.svg)](https://github.com/jomarmontuya/herdr-file-viewer/actions/workflows/build.yml)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![herdr-plugin](https://img.shields.io/badge/herdr--plugin-✓-8b5cf6)
@@ -11,11 +11,33 @@ A lightweight, mouse-enabled **project file tree** for
 pane is a narrow right sidebar: folders expand in place and files open as real
 Herdr tabs. Preview, search, and git panels are not started in this mode.
 
-This MediaNet fork builds on
+This fork builds on
 [ismaelosuna7824/herdr-file-viewer](https://github.com/ismaelosuna7824/herdr-file-viewer)
 and keeps its MIT license and upstream attribution. The original full viewer
 code remains available without `--tree-only`; the linked plugin uses the lean
 tree mode and the plugin ID `medianeth.file-viewer`.
+
+## Quick install
+
+Install the public plugin into Herdr:
+
+```sh
+herdr plugin install jomarmontuya/herdr-file-viewer
+```
+
+Then create or open a Herdr workspace. New workspaces open with the normal CLI
+pane and a narrow right-side file tree by default. Click folders to expand or
+collapse them; click a file to open it as a Herdr tab with its own right-side
+tree.
+
+For local development from a clone:
+
+```sh
+git clone https://github.com/jomarmontuya/herdr-file-viewer.git
+cd herdr-file-viewer
+sh scripts/fetch-or-build.sh
+herdr plugin link "$PWD"
+```
 
 ## Retained full-viewer preview
 
@@ -180,7 +202,7 @@ aliases work on Linux/Windows.
 | `Ctrl+w` (`Alt+w`) | Whole word (`ab`) |
 | `Ctrl+r` (`Alt+r`) | Regular expression (`.*`) |
 
-## Local install (this fork)
+## Local install
 
 ```sh
 cd /Users/jomar/Documents/Work/medianeth/herdr-file-viewer
@@ -303,7 +325,7 @@ header (e.g. `⬆ v0.1.4 available`) when one exists. To update, re-run the inst
 command — it pulls the latest and rebuilds/downloads the binary:
 
 ```sh
-herdr plugin install ismaelosuna7824/herdr-file-viewer
+herdr plugin install jomarmontuya/herdr-file-viewer
 ```
 
 ## Develop
