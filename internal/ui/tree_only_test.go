@@ -74,6 +74,53 @@ func TestTreeOnlyRendersOnlyTheExplorer(t *testing.T) {
 	}
 }
 
+func TestTreeOnlyFollowsSourcePaneLiveCWD(t *testing.T) {
+	oldRoot := fixtureRoot(t)
+	newRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(newRoot, "project-grey.txt"), []byte("current project\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeHerdr := filepath.Join(t.TempDir(), "herdr")
+	script := `#!/bin/sh
+if [ "$1 $2" = "pane list" ]; then
+  printf '{"result":{"panes":[{"pane_id":"w-follow:p1","tab_id":"w-follow:t1","workspace_id":"w-follow","cwd":"%s","foreground_cwd":"%s"}]}}\n' "$HERDR_TEST_OLD_ROOT" "$HERDR_TEST_NEW_ROOT"
+fi
+`
+	if err := os.WriteFile(fakeHerdr, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_BIN_PATH", fakeHerdr)
+	t.Setenv("HERDR_WORKSPACE_ID", "w-follow")
+	t.Setenv("HERDR_TREE_FOLLOW_PANE_ID", "w-follow:p1")
+	t.Setenv("HERDR_TEST_OLD_ROOT", oldRoot)
+	t.Setenv("HERDR_TEST_NEW_ROOT", newRoot)
+
+	m, err := NewTree(oldRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := followTreeCWDCommand()
+	if cmd == nil {
+		t.Fatal("default workspace tree should poll its source pane cwd")
+	}
+	next, _ := m.Update(cmd())
+	got := next.(Model)
+	if got.root != newRoot || got.tree.Root.Path != newRoot {
+		t.Fatalf("tree did not re-root to live cwd: model=%q tree=%q want=%q", got.root, got.tree.Root.Path, newRoot)
+	}
+	if view := got.View(); !strings.Contains(view, "project-grey.txt") || strings.Contains(view, "main.go") {
+		t.Fatalf("tree still renders the stale root:\n%s", view)
+	}
+}
+
+func TestTreeOnlyWithoutFollowPaneStaysPinned(t *testing.T) {
+	t.Setenv("HERDR_TREE_FOLLOW_PANE_ID", "")
+	if cmd := followTreeCWDCommand(); cmd != nil {
+		t.Fatal("file-tab and manually pinned trees must not poll another pane cwd")
+	}
+}
+
 func TestTreeOnlyClickOpensFileTabAcrossFullPaneWidth(t *testing.T) {
 	root := fixtureRoot(t)
 	logPath := filepath.Join(t.TempDir(), "herdr-args.log")

@@ -122,6 +122,9 @@ else
 	if !strings.Contains(string(logged), wantTree) {
 		t.Fatalf("new file tab should retain the right-side tree\nwant: %s\ngot:\n%s", wantTree, logged)
 	}
+	if strings.Contains(string(logged), "HERDR_TREE_FOLLOW_PANE_ID") {
+		t.Fatalf("file-tab tree must stay pinned to the project root:\n%s", logged)
+	}
 }
 
 func TestOpenFileTabReusesExistingTabForSamePath(t *testing.T) {

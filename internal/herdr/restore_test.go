@@ -82,7 +82,7 @@ fi`)
 		t.Fatal(err)
 	}
 	got := string(logged)
-	want := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w3:p1 --env HERDR_TREE_ROOT=" + root + " --direction right --no-focus"
+	want := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w3:p1 --env HERDR_TREE_ROOT=" + root + " --env HERDR_TREE_FOLLOW_PANE_ID=w3:p1 --direction right --no-focus"
 	if !strings.Contains(got, want) {
 		t.Fatalf("focused terminal tab must regain its default tree\nwant: %s\ngot:\n%s", want, got)
 	}
@@ -153,6 +153,9 @@ fi`)
 	}
 	if !strings.Contains(got, "--env HERDR_TREE_ROOT="+root+" --direction") {
 		t.Fatalf("restored tree must use the existing project root, not nested event cwd:\n%s", got)
+	}
+	if strings.Contains(got, "HERDR_TREE_FOLLOW_PANE_ID") {
+		t.Fatalf("file-tab tree must stay pinned to the project root:\n%s", got)
 	}
 }
 
