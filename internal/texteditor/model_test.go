@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func press(m Model, keys ...tea.KeyMsg) Model {
@@ -291,5 +292,21 @@ func TestHorizontalScrollRendersTabsWideRunesAndSelectedNewline(t *testing.T) {
 	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlShiftHome})
 	if m.Cursor() != 0 {
 		t.Fatalf("ctrl+shift+home cursor = %d, want 0", m.Cursor())
+	}
+}
+
+func TestNarrowSelectionViewNeverExceedsEditorDimensions(t *testing.T) {
+	m := New("wide selected content\nnext")
+	m.SetSize(10, 6)
+	m = press(m, tea.KeyMsg{Type: tea.KeyShiftEnd})
+
+	rows := strings.Split(m.View(), "\n")
+	if len(rows) != 6 {
+		t.Fatalf("editor rendered %d rows, want exactly 6:\n%s", len(rows), m.View())
+	}
+	for i, row := range rows {
+		if got := lipgloss.Width(row); got > 10 {
+			t.Fatalf("row %d width = %d, exceeds editor width 10:\n%s", i+1, got, m.View())
+		}
 	}
 }
