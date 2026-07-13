@@ -100,6 +100,7 @@ fi
 	if err != nil {
 		t.Fatal(err)
 	}
+	m = send(m, tea.WindowSizeMsg{Width: 60, Height: 24}).(Model)
 	cmd := followTreeCWDCommand()
 	if cmd == nil {
 		t.Fatal("default workspace tree should poll its source pane cwd")

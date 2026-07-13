@@ -90,16 +90,6 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 			state.set(workspaceID, path, tabID)
 		}
 	}
-
-	if path != "" && filePane.PaneID != "" {
-		if err := rerunRestoredPane(bin, filePane, restoredPaneCommand("file", workspaceID, tabID, filePane.PaneID, root, path)); err != nil {
-			return err
-		}
-	}
-	if treePane.PaneID != "" {
-		return rerunRestoredPane(bin, treePane, restoredPaneCommand("viewer", workspaceID, tabID, treePane.PaneID, root, ""))
-	}
-
 	target := filePane
 	if target.PaneID == "" {
 		for _, pane := range tabPanes {
@@ -109,10 +99,28 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 			}
 		}
 	}
+	followPaneID := ""
+	if path == "" {
+		followPaneID = target.PaneID
+	}
+
+	if path != "" && filePane.PaneID != "" {
+		if err := rerunRestoredPane(bin, filePane, restoredPaneCommand("file", workspaceID, tabID, filePane.PaneID, root, path, "")); err != nil {
+			return err
+		}
+	}
+	if treePane.PaneID != "" {
+		return rerunRestoredPane(bin, treePane, restoredPaneCommand("viewer", workspaceID, tabID, treePane.PaneID, root, "", followPaneID))
+	}
+
 	if target.PaneID == "" {
 		return errors.New("focused Herdr tab has no pane available for the file tree")
 	}
-	out, err = exec.Command(bin, openTreeArgs(target.PaneID, root)...).CombinedOutput()
+	args := openTreeArgs(target.PaneID, root)
+	if followPaneID != "" {
+		args = openFollowingTreeArgs(target.PaneID, root)
+	}
+	out, err = exec.Command(bin, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("restore default Herdr file tree: %w: %s", err, out)
 	}
@@ -227,7 +235,7 @@ func rerunRestoredPane(bin string, pane paneContext, command string) error {
 	return nil
 }
 
-func restoredPaneCommand(entrypoint, workspaceID, tabID, paneID, root, path string) string {
+func restoredPaneCommand(entrypoint, workspaceID, tabID, paneID, root, path, followPaneID string) string {
 	pluginRoot := os.Getenv("HERDR_PLUGIN_ROOT")
 	binary := filepath.Join(pluginRoot, "bin", "file-viewer")
 	env := []string{
@@ -244,6 +252,9 @@ func restoredPaneCommand(entrypoint, workspaceID, tabID, paneID, root, path stri
 	}
 	if path != "" {
 		env = append(env, "HERDR_FILE_PATH="+path)
+	}
+	if followPaneID != "" {
+		env = append(env, "HERDR_TREE_FOLLOW_PANE_ID="+followPaneID)
 	}
 	if contextJSON := os.Getenv("HERDR_PLUGIN_CONTEXT_JSON"); contextJSON != "" {
 		env = append(env, "HERDR_PLUGIN_CONTEXT_JSON="+contextJSON)

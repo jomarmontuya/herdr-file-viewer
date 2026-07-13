@@ -80,7 +80,7 @@ func ensureWorkspaceTree(workspaceID string) error {
 			}
 		}
 		if targetPane.PaneID != "" {
-			out, err = exec.Command(bin, openTreeArgs(targetPane.PaneID, targetPane.Cwd)...).CombinedOutput()
+			out, err = exec.Command(bin, openFollowingTreeArgs(targetPane.PaneID, targetPane.Cwd)...).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("attach default Herdr file tree: %w: %s", err, out)
 			}

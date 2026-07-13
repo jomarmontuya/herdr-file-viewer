@@ -164,6 +164,11 @@ type editorClosedMsg struct{ err error }
 
 type fileTabOpenedMsg struct{ err error }
 
+type treeCWDMsg struct {
+	root string
+	err  error
+}
+
 // highlightMsg carries the result of asynchronous syntax highlighting.
 type highlightMsg struct {
 	gen   int
@@ -218,7 +223,7 @@ func newModel(root string, treeOnly bool) (Model, error) {
 // mode. The full UI also loads its file, git, and update data.
 func (m Model) Init() tea.Cmd {
 	if m.treeOnly {
-		return tea.Batch(resizeTreePaneCmd(), tickCmd())
+		return tea.Batch(resizeTreePaneCmd(), followTreeCWDCommand(), tickCmd())
 	}
 	return tea.Batch(loadFilesCmd(m.root), loadGitStatusCmd(m.root),
 		loadGitLogCmd(m.root), loadBranchesCmd(m.root), loadChangesCmd(m.root),
@@ -248,6 +253,18 @@ func resizeTreePaneCmd() tea.Cmd {
 		// Tree startup must remain usable in both cases.
 		_ = exec.Command(bin, treePaneResizeArgs(paneID)...).Run()
 		return nil
+	}
+}
+
+func followTreeCWDCommand() tea.Cmd {
+	paneID := os.Getenv("HERDR_TREE_FOLLOW_PANE_ID")
+	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
+	if paneID == "" || workspaceID == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		root, err := herdr.PaneCWD(workspaceID, paneID)
+		return treeCWDMsg{root: root, err: err}
 	}
 }
 
@@ -444,6 +461,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case treeCWDMsg:
+		if msg.err != nil || msg.root == "" || filepath.Clean(msg.root) == filepath.Clean(m.root) {
+			return m, nil
+		}
+		if err := m.reRootTree(msg.root); err != nil {
+			m.statusNote = "cwd refresh failed: " + err.Error()
+			return m, nil
+		}
+		m.statusNote = ""
+		return m, nil
+
 	case highlightMsg:
 		if msg.gen == m.highlightGen {
 			m.viewer.SetHighlighted(msg.path, msg.lines)
@@ -465,7 +493,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// then schedule the next tick.
 		m.tree.Refresh()
 		if m.treeOnly {
-			return m, tickCmd()
+			return m, tea.Batch(followTreeCWDCommand(), tickCmd())
 		}
 		return m, tea.Batch(autoRefreshCmd(m.root), tickCmd())
 
@@ -557,6 +585,8 @@ func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "r":
 		m.tree.Refresh()
+		m.persistTreeState()
+		return m, followTreeCWDCommand()
 	case "up", "k":
 		m.tree.MoveUp()
 	case "down", "j":
@@ -577,6 +607,27 @@ func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.persistTreeState()
 	return m, nil
+}
+
+func (m *Model) reRootTree(root string) error {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	if filepath.Clean(abs) == filepath.Clean(m.root) {
+		return nil
+	}
+	tree, err := explorer.New(abs)
+	if err != nil {
+		return err
+	}
+	m.persistTreeState()
+	m.root = abs
+	m.tree = tree
+	m.currentFile = ""
+	m.restoreTreeState()
+	m.persistTreeState()
+	return nil
 }
 
 func (m Model) openSelectedFileTab() tea.Cmd {

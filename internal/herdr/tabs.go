@@ -142,16 +142,29 @@ func openFileTabArgs(workspaceID, path string) []string {
 }
 
 func openTreeArgs(targetPaneID, projectRoot string) []string {
-	return []string{
+	return treeOpenArgs(targetPaneID, projectRoot, "")
+}
+
+func openFollowingTreeArgs(targetPaneID, projectRoot string) []string {
+	return treeOpenArgs(targetPaneID, projectRoot, targetPaneID)
+}
+
+func treeOpenArgs(targetPaneID, projectRoot, followPaneID string) []string {
+	args := []string{
 		"plugin", "pane", "open",
 		"--plugin", pluginID,
 		"--entrypoint", "viewer",
 		"--placement", "split",
 		"--target-pane", targetPaneID,
 		"--env", "HERDR_TREE_ROOT=" + projectRoot,
+	}
+	if followPaneID != "" {
+		args = append(args, "--env", "HERDR_TREE_FOLLOW_PANE_ID="+followPaneID)
+	}
+	return append(args,
 		"--direction", "right",
 		"--no-focus",
-	}
+	)
 }
 
 func parseOpenedPane(raw []byte) (openedPane, error) {
@@ -217,11 +230,12 @@ func parseTabContext(raw []byte) (tabContext, error) {
 }
 
 type paneContext struct {
-	PaneID      string
-	TabID       string
-	WorkspaceID string
-	Label       string
-	Cwd         string
+	PaneID        string
+	TabID         string
+	WorkspaceID   string
+	Label         string
+	Cwd           string
+	ForegroundCwd string
 }
 
 func tabHasOwnedFilePane(bin, workspaceID, tabID, path string) bool {
@@ -247,11 +261,12 @@ func parsePaneList(raw []byte) ([]paneContext, error) {
 	var response struct {
 		Result struct {
 			Panes []struct {
-				PaneID      string `json:"pane_id"`
-				TabID       string `json:"tab_id"`
-				WorkspaceID string `json:"workspace_id"`
-				Label       string `json:"label"`
-				Cwd         string `json:"cwd"`
+				PaneID        string `json:"pane_id"`
+				TabID         string `json:"tab_id"`
+				WorkspaceID   string `json:"workspace_id"`
+				Label         string `json:"label"`
+				Cwd           string `json:"cwd"`
+				ForegroundCwd string `json:"foreground_cwd"`
 			} `json:"panes"`
 		} `json:"result"`
 	}
@@ -261,11 +276,12 @@ func parsePaneList(raw []byte) ([]paneContext, error) {
 	panes := make([]paneContext, 0, len(response.Result.Panes))
 	for _, pane := range response.Result.Panes {
 		panes = append(panes, paneContext{
-			PaneID:      pane.PaneID,
-			TabID:       pane.TabID,
-			WorkspaceID: pane.WorkspaceID,
-			Label:       pane.Label,
-			Cwd:         pane.Cwd,
+			PaneID:        pane.PaneID,
+			TabID:         pane.TabID,
+			WorkspaceID:   pane.WorkspaceID,
+			Label:         pane.Label,
+			Cwd:           pane.Cwd,
+			ForegroundCwd: pane.ForegroundCwd,
 		})
 	}
 	return panes, nil
