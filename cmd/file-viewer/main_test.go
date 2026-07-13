@@ -6,7 +6,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ismaelosuna7824/herdr-file-viewer/internal/filetab"
+	"github.com/ismaelosuna7824/herdr-file-viewer/internal/ui"
 )
+
+func TestFileTabsLeaveMouseSelectionToHerdr(t *testing.T) {
+	if shouldCaptureMouse(filetab.Model{}) {
+		t.Fatal("standalone file tabs must leave mouse drag selection to Herdr core")
+	}
+}
+
+func TestInteractiveTreePanesKeepMouseCapture(t *testing.T) {
+	if !shouldCaptureMouse(ui.Model{}) {
+		t.Fatal("tree/browser panes still need Bubble Tea mouse events for clicking files and folders")
+	}
+}
 
 func TestResolveRootSkipsTreeOnlyFlag(t *testing.T) {
 	root := t.TempDir()
