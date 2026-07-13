@@ -1,5 +1,5 @@
-// Package filetab provides the standalone read-only file pane opened in Herdr
-// tabs by the explorer.
+// Package filetab provides the standalone file pane opened in Herdr tabs by
+// the explorer.
 package filetab
 
 import (
@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/jomarmontuya/herdr-file-viewer/internal/texteditor"
 	"github.com/jomarmontuya/herdr-file-viewer/internal/viewer"
 )
 
@@ -19,7 +19,7 @@ import (
 // in-pane editor.
 type Model struct {
 	viewer  viewer.Model
-	edit    textarea.Model
+	edit    texteditor.Model
 	width   int
 	height  int
 	editing bool
@@ -122,11 +122,7 @@ func (m Model) enterEdit() (tea.Model, tea.Cmd) {
 		m.status = "not editable"
 		return m, nil
 	}
-	m.edit = textarea.New()
-	m.edit.Prompt = ""
-	m.edit.ShowLineNumbers = true
-	m.edit.SetValue(m.viewer.Raw())
-	m.edit.CursorStart()
+	m.edit = texteditor.New(m.viewer.Raw())
 	m.editing = true
 	m.status = ""
 	m.resizeEditor()
@@ -175,8 +171,7 @@ func (m *Model) resizeEditor() {
 	if editHeight < 1 {
 		editHeight = 1
 	}
-	m.edit.SetWidth(m.width)
-	m.edit.SetHeight(editHeight)
+	m.edit.SetSize(m.width, editHeight)
 }
 
 func (m Model) editView() string {
@@ -187,6 +182,12 @@ func (m Model) editView() string {
 		Width(m.width).
 		Render(truncate(title, m.width))
 	help := " ctrl+s save · esc cancel"
+	if m.edit.SelectionLen() > 0 {
+		help += fmt.Sprintf(" · %d selected", m.edit.SelectionLen())
+	}
+	if m.edit.Status() != "" {
+		help += " · " + m.edit.Status()
+	}
 	if m.status != "" {
 		help += " · " + m.status
 	}

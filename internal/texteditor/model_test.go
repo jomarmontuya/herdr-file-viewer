@@ -1,6 +1,7 @@
 package texteditor
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -143,5 +144,152 @@ func TestUnshiftedArrowCollapsesSelectionAtTheExpectedEdge(t *testing.T) {
 	)
 	if got := m.Cursor(); got != 2 {
 		t.Fatalf("right should collapse selection to end, cursor = %d", got)
+	}
+}
+
+func TestCopyCutAndPasteUseTheSelectedRange(t *testing.T) {
+	m := New("alpha beta")
+	var copied string
+	m.writeClipboard = func(value string) error {
+		copied = value
+		return nil
+	}
+	m.readClipboard = func() (string, error) { return "gamma", nil }
+	for range 5 {
+		m = press(m, tea.KeyMsg{Type: tea.KeyShiftRight})
+	}
+
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlC})
+	if copied != "alpha" || m.Status() != "copied" {
+		t.Fatalf("ctrl+c copied %q with status %q", copied, m.Status())
+	}
+	if m.Value() != "alpha beta" {
+		t.Fatal("copy must not modify the document")
+	}
+
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlX})
+	if m.Value() != " beta" || m.Status() != "cut" {
+		t.Fatalf("ctrl+x produced value %q with status %q", m.Value(), m.Status())
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlV})
+	if m.Value() != "gamma beta" || m.Status() != "pasted" {
+		t.Fatalf("ctrl+v produced value %q with status %q", m.Value(), m.Status())
+	}
+}
+
+func TestFailedCutKeepsSelectedText(t *testing.T) {
+	m := New("keep")
+	m.writeClipboard = func(string) error { return errors.New("clipboard unavailable") }
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlA}, tea.KeyMsg{Type: tea.KeyCtrlX})
+
+	if m.Value() != "keep" {
+		t.Fatalf("failed cut should preserve the document, got %q", m.Value())
+	}
+	if !strings.Contains(m.Status(), "clipboard unavailable") {
+		t.Fatalf("failed cut status = %q", m.Status())
+	}
+}
+
+func TestDeletionInsertionAndAliasShortcuts(t *testing.T) {
+	m := New("one two")
+	m = press(m,
+		tea.KeyMsg{Type: tea.KeyCtrlEnd},
+		tea.KeyMsg{Type: tea.KeyCtrlW},
+	)
+	if got := m.Value(); got != "one " {
+		t.Fatalf("ctrl+w value = %q, want trailing word deleted", got)
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlH})
+	if got := m.Value(); got != "one" {
+		t.Fatalf("ctrl+h value = %q, want backward deletion", got)
+	}
+	m = press(m,
+		tea.KeyMsg{Type: tea.KeyHome},
+		tea.KeyMsg{Type: tea.KeyCtrlD},
+		tea.KeyMsg{Type: tea.KeyEnd},
+		tea.KeyMsg{Type: tea.KeyBackspace},
+		tea.KeyMsg{Type: tea.KeyEnter},
+		tea.KeyMsg{Type: tea.KeyTab},
+	)
+	if got := m.Value(); got != "n\n\t" {
+		t.Fatalf("delete/enter/tab shortcuts produced %q", got)
+	}
+}
+
+func TestSetValueFocusTinySizeAndNonKeyMessages(t *testing.T) {
+	m := New("old")
+	if cmd := m.Focus(); cmd != nil {
+		t.Fatal("static editor focus should not schedule a command")
+	}
+	m.SetSize(0, 0)
+	m.SetValue("new")
+	if m.Cursor() != 0 || m.Value() != "new" {
+		t.Fatalf("SetValue reset to cursor=%d value=%q", m.Cursor(), m.Value())
+	}
+	next, cmd := m.Update(tea.WindowSizeMsg{Width: 1, Height: 1})
+	if cmd != nil || next.Value() != "new" || next.View() == "" {
+		t.Fatal("non-key messages should leave a renderable editor unchanged")
+	}
+}
+
+func TestVerticalMovementCollapsesSelectionAndScrolls(t *testing.T) {
+	m := New("aa\nbb\ncc\n")
+	m.SetSize(8, 2)
+	m = press(m,
+		tea.KeyMsg{Type: tea.KeyRight},
+		tea.KeyMsg{Type: tea.KeyShiftDown},
+		tea.KeyMsg{Type: tea.KeyDown},
+	)
+	if m.SelectionLen() != 0 || m.Cursor() != 7 {
+		t.Fatalf("down should collapse and continue vertically: cursor=%d selection=%d", m.Cursor(), m.SelectionLen())
+	}
+	if m.scrollLine == 0 {
+		t.Fatal("cursor moving below the viewport should scroll the editor")
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyCtrlHome})
+	if m.Cursor() != 0 || m.scrollLine != 0 {
+		t.Fatalf("ctrl+home should return to top: cursor=%d scroll=%d", m.Cursor(), m.scrollLine)
+	}
+}
+
+func TestClipboardFailuresAreReportedWithoutChangingText(t *testing.T) {
+	m := New("keep")
+	m.writeClipboard = func(string) error { return errors.New("copy unavailable") }
+	m.readClipboard = func() (string, error) { return "", errors.New("paste unavailable") }
+
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlC})
+	if m.Status() != "" {
+		t.Fatalf("copy with no selection should be a no-op, got %q", m.Status())
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlA}, tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !strings.Contains(m.Status(), "copy unavailable") || m.Value() != "keep" {
+		t.Fatalf("failed copy status=%q value=%q", m.Status(), m.Value())
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlV})
+	if !strings.Contains(m.Status(), "paste unavailable") || m.Value() != "keep" {
+		t.Fatalf("failed paste status=%q value=%q", m.Status(), m.Value())
+	}
+}
+
+func TestHorizontalScrollRendersTabsWideRunesAndSelectedNewline(t *testing.T) {
+	m := New("\twide🙂text\nnext")
+	m.SetSize(10, 3)
+	m = press(m, tea.KeyMsg{Type: tea.KeyShiftEnd})
+	if m.scrollCol == 0 {
+		t.Fatal("long selected line should scroll horizontally to keep the cursor visible")
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyShiftRight})
+	view := m.View()
+	if !strings.Contains(view, "selected") || !strings.Contains(view, "next") {
+		t.Fatalf("scrolled selection view lost state or following line:\n%s", view)
+	}
+
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlShiftEnd})
+	if got := m.SelectedText(); !strings.HasSuffix(got, "next") {
+		t.Fatalf("ctrl+shift+end selection = %q", got)
+	}
+	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlShiftHome})
+	if m.Cursor() != 0 {
+		t.Fatalf("ctrl+shift+home cursor = %d, want 0", m.Cursor())
 	}
 }
