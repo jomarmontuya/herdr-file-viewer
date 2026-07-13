@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 )
 
 func fakeHerdr(t *testing.T, scriptBody string) (string, string) {
@@ -50,6 +52,81 @@ func TestOpenFileTabArgsUseFileDirectoryAsOwnershipMarker(t *testing.T) {
 		}
 	}
 	t.Fatalf("file tab must launch in its file directory: %#v", got)
+}
+
+func TestOpenDiffTabArgsCarryModeAndProjectRoot(t *testing.T) {
+	path := filepath.Join("/tmp", "project", "docs", "read me.md")
+	root := filepath.Join("/tmp", "project")
+	got := openDiffTabArgs("w7", path, root, gitdiff.ModeStaged)
+	want := []string{
+		"plugin", "pane", "open",
+		"--plugin", "medianeth.file-viewer",
+		"--entrypoint", "diff",
+		"--placement", "tab",
+		"--workspace", "w7",
+		"--cwd", filepath.Dir(path),
+		"--env", "HERDR_DIFF_PATH=" + path,
+		"--env", "HERDR_DIFF_ROOT=" + root,
+		"--env", "HERDR_DIFF_MODE=staged",
+		"--focus",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrong Herdr diff args\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestOpenDiffTabReusesSameModeButSeparatesStagedAndWorktree(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint diff"*)
+      if echo "$*" | grep -q 'HERDR_DIFF_MODE=staged'; then
+        printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-stage","tab_id":"w2:t-stage"}}}}'
+      else
+        printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-work","tab_id":"w2:t-work"}}}}'
+      fi
+      ;;
+    *) printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p-tree","tab_id":"w2:t-tree"}}}}' ;;
+  esac
+elif [ "$1 $2" = "tab get" ]; then
+  case "$3" in
+    w2:t-stage) printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t-stage","workspace_id":"w2","label":"S main.go","pane_count":2}}}' ;;
+    *) printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t-work","workspace_id":"w2","label":"M main.go","pane_count":2}}}' ;;
+  esac
+elif [ "$1 $2" = "pane list" ]; then
+  printf '{"result":{"panes":[{"pane_id":"w2:p-stage","tab_id":"w2:t-stage","workspace_id":"w2","label":"Diff","cwd":"%s"},{"pane_id":"w2:p-work","tab_id":"w2:t-work","workspace_id":"w2","label":"Diff","cwd":"%s"}]}}\n' "$HERDR_TEST_FILE_DIR" "$HERDR_TEST_FILE_DIR"
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	root := t.TempDir()
+	path := filepath.Join(root, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_TEST_FILE_DIR", filepath.Dir(path))
+
+	if err := OpenDiffTab("w2", path, root, gitdiff.ModeStaged); err != nil {
+		t.Fatal(err)
+	}
+	if err := OpenDiffTab("w2", path, root, gitdiff.ModeStaged); err != nil {
+		t.Fatal(err)
+	}
+	if err := OpenDiffTab("w2", path, root, gitdiff.ModeWorktree); err != nil {
+		t.Fatal(err)
+	}
+
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(logged)
+	if count := strings.Count(got, "--entrypoint diff"); count != 2 {
+		t.Fatalf("same mode should reuse while staged/worktree stay distinct; got %d opens:\n%s", count, got)
+	}
+	if !strings.Contains(got, "tab focus w2:t-stage") {
+		t.Fatalf("second staged click should focus its existing tab:\n%s", got)
+	}
 }
 
 func TestParseOpenedTabID(t *testing.T) {

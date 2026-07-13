@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 )
 
 func TestRestoreFocusedFileTabRerunsFileAndTreeInRestoredShells(t *testing.T) {
@@ -85,6 +87,53 @@ fi`)
 	want := "plugin pane open --plugin medianeth.file-viewer --entrypoint viewer --placement split --target-pane w3:p1 --env HERDR_TREE_ROOT=" + root + " --env HERDR_TREE_FOLLOW_PANE_ID=w3:p1 --direction right --no-focus"
 	if !strings.Contains(got, want) {
 		t.Fatalf("focused terminal tab must regain its default tree\nwant: %s\ngot:\n%s", want, got)
+	}
+}
+
+func TestRestoreFocusedDiffTabRerunsDiffAndTreeInRestoredShells(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "pane list" ]; then
+  printf '%s\n' '{"result":{"panes":[{"pane_id":"w9:p-diff","tab_id":"w9:t3","workspace_id":"w9","label":"Diff","cwd":"/tmp/project/docs"},{"pane_id":"w9:p-tree","tab_id":"w9:t3","workspace_id":"w9","label":"File Tree","cwd":"/tmp/project"}]}}'
+elif [ "$1 $2" = "pane process-info" ]; then
+  printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":42,"foreground_process_group_id":42,"foreground_processes":[{"name":"zsh","argv":["-zsh"]}]}}}\n' "$4"
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	stateDir := t.TempDir()
+	root := t.TempDir()
+	docs := filepath.Join(root, "docs")
+	if err := os.MkdirAll(docs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(docs, "guide.md")
+	if err := os.WriteFile(path, []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)
+	t.Setenv("HERDR_PLUGIN_ROOT", "/tmp/plugin")
+	state := newFileTabState()
+	state.setDiff("w9", path, gitdiff.ModeStaged, "w9:t3")
+	state.setRoot("w9", root)
+	if err := saveFileTabState(filepath.Join(stateDir, fileTabStateFile), state); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RestoreFocusedTab("w9", "w9:t3", root); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(logged)
+	for _, want := range []string{
+		"pane run w9:p-diff", "HERDR_DIFF_PATH=" + path,
+		"HERDR_DIFF_ROOT=" + root, "HERDR_DIFF_MODE=staged",
+		"pane run w9:p-tree", "--tree-only",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("restored diff tab missing %q:\n%s", want, got)
+		}
 	}
 }
 

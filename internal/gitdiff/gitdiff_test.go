@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -87,4 +88,53 @@ func TestLoadNoChangesIsEmpty(t *testing.T) {
 	if !d.Empty {
 		t.Errorf("a path with no diff should be Empty")
 	}
+}
+
+func TestLoadModeSeparatesStagedAndWorktreeDiffs(t *testing.T) {
+	root := repoWithChange(t)
+	path := filepath.Join(root, "a.txt")
+
+	// Stage one version, then make a second worktree-only edit. A partially
+	// staged file must produce two different reviews in Source Control.
+	if err := os.WriteFile(path, []byte("one\nstaged version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", root, "add", "a.txt").CombinedOutput(); err != nil {
+		t.Fatalf("stage a.txt: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(path, []byte("one\nstaged version\nworktree version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	staged := LoadMode(context.Background(), root, "a.txt", ModeStaged)
+	worktree := LoadMode(context.Background(), root, "a.txt", ModeWorktree)
+	stagedText := diffText(staged)
+	worktreeText := diffText(worktree)
+
+	if !strings.Contains(stagedText, "staged version") || strings.Contains(stagedText, "worktree version") {
+		t.Fatalf("staged diff crossed into the worktree:\n%s", stagedText)
+	}
+	if !strings.Contains(worktreeText, "worktree version") || strings.Contains(worktreeText, "THREE") {
+		t.Fatalf("worktree diff was not based on the index:\n%s", worktreeText)
+	}
+}
+
+func TestLoadModeUntrackedShowsWholeFile(t *testing.T) {
+	root := repoWithChange(t)
+	if err := os.WriteFile(filepath.Join(root, "fresh.txt"), []byte("alpha\nbeta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := LoadMode(context.Background(), root, "fresh.txt", ModeUntracked)
+	if d.Empty || d.Added != 2 || d.Removed != 0 {
+		t.Fatalf("untracked diff = empty:%v +%d -%d, want whole file as +2", d.Empty, d.Added, d.Removed)
+	}
+}
+
+func diffText(d FileDiff) string {
+	var b strings.Builder
+	for _, line := range d.Lines {
+		b.WriteString(line.Text)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }

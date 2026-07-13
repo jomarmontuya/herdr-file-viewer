@@ -37,6 +37,12 @@ func TestInteractiveTreePanesKeepMouseCapture(t *testing.T) {
 	}
 }
 
+func TestDiffTabsLeaveMouseSelectionToHerdr(t *testing.T) {
+	if shouldCaptureMouse(ui.DiffTabModel{}) {
+		t.Fatal("diff tabs must leave mouse drag selection to Herdr core")
+	}
+}
+
 func TestProgramOptionsOnlyEmitMouseTrackingForInteractiveTreePanes(t *testing.T) {
 	const enableCellMotion = "\x1b[?1002h"
 
@@ -46,6 +52,7 @@ func TestProgramOptionsOnlyEmitMouseTrackingForInteractiveTreePanes(t *testing.T
 		wantMouse bool
 	}{
 		{name: "file tab", model: filetab.Model{}, wantMouse: false},
+		{name: "diff tab", model: ui.DiffTabModel{}, wantMouse: false},
 		{name: "tree pane", model: ui.Model{}, wantMouse: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -155,5 +162,16 @@ func TestManifestRegistersFocusedTabRestoreHook(t *testing.T) {
 	}
 	if !strings.Contains(manifest, `command = ["./bin/file-viewer", "--restore-focused-tab"]`) {
 		t.Fatalf("restore hooks must invoke the focused-tab restorer:\n%s", manifest)
+	}
+}
+
+func TestManifestRegistersDiffEntrypoint(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "herdr-plugin.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := string(raw)
+	if !strings.Contains(manifest, `id = "diff"`) || !strings.Contains(manifest, `title = "Diff"`) {
+		t.Fatalf("manifest must register a standalone diff pane:\n%s", manifest)
 	}
 }
