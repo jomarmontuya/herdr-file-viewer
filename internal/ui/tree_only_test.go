@@ -170,3 +170,41 @@ func TestTreeOnlyKeyboardNavigationAndOpen(t *testing.T) {
 		t.Fatal("q should close the tree pane")
 	}
 }
+
+func TestTreeOnlyPersistsExpandedFoldersAndSelectionAcrossRestart(t *testing.T) {
+	root := fixtureRoot(t)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	t.Setenv("HERDR_WORKSPACE_ID", "w-state")
+	t.Setenv("HERDR_TAB_ID", "w-state:t7")
+
+	m, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.ready = true
+	m.width, m.height = 60, 24
+
+	// Root children sort as docs/, pkg/, main.go. Expand docs/ and select its file.
+	next, _ := m.handleTreeKey(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(Model)
+	next, _ = m.handleTreeKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = next.(Model)
+	next, _ = m.handleTreeKey(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(Model)
+	if n := m.tree.Selected(); n == nil || n.Name != "readme.md" {
+		t.Fatalf("test setup should select docs/readme.md, got %+v", n)
+	}
+
+	restored, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := restored.tree.Selected()
+	if n == nil || n.Path != filepath.Join(root, "docs", "readme.md") {
+		t.Fatalf("tree selection was not restored: %+v", n)
+	}
+	docs := restored.tree.Visible()[1]
+	if docs.Name != "docs" || !docs.Expanded {
+		t.Fatalf("expanded folder state was not restored: %+v", docs)
+	}
+}

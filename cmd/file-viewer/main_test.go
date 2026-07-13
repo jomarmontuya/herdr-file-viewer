@@ -66,6 +66,14 @@ func TestWorkspaceIDFromEventSupportsEventEnvelope(t *testing.T) {
 	}
 }
 
+func TestTabIDFromEventSupportsFocusedTabEnvelope(t *testing.T) {
+	t.Setenv("HERDR_TAB_ID", "")
+	t.Setenv("HERDR_PLUGIN_EVENT_JSON", `{"event":"tab.focused","data":{"type":"tab_focused","workspace_id":"w13","tab_id":"w13:t7"}}`)
+	if got := tabIDFromEvent(); got != "w13:t7" {
+		t.Fatalf("got %q, want w13:t7", got)
+	}
+}
+
 func TestManifestRegistersWorkspaceCreatedHook(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "herdr-plugin.toml"))
 	if err != nil {
@@ -75,5 +83,22 @@ func TestManifestRegistersWorkspaceCreatedHook(t *testing.T) {
 	if !strings.Contains(manifest, `on = "workspace.created"`) ||
 		!strings.Contains(manifest, `command = ["./bin/file-viewer", "--workspace-created"]`) {
 		t.Fatalf("manifest must auto-attach the tree on workspace creation:\n%s", manifest)
+	}
+}
+
+func TestManifestRegistersFocusedWorkspaceAndTabRestoreHooks(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "herdr-plugin.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := string(raw)
+	for _, event := range []string{"workspace.focused", "tab.focused"} {
+		want := `on = "` + event + `"`
+		if !strings.Contains(manifest, want) {
+			t.Fatalf("manifest must restore plugin panes on %s:\n%s", event, manifest)
+		}
+	}
+	if !strings.Contains(manifest, `command = ["./bin/file-viewer", "--restore-focused-tab"]`) {
+		t.Fatalf("restore hooks must invoke the focused-tab restorer:\n%s", manifest)
 	}
 }
