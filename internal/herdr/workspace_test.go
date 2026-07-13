@@ -118,3 +118,58 @@ fi`)
 		t.Fatalf("duplicate delivery opened %d trees:\n%s", count, logged)
 	}
 }
+
+func TestWorkspaceCreatedAndFocusedTabHooksDoNotRaceDuplicateTrees(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HERDR_TEST_ROOT", root)
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "pane list" ]; then
+  if [ -f "$HERDR_TEST_TREE_MARKER" ]; then
+    printf '{"result":{"panes":[{"pane_id":"w10:p1","tab_id":"w10:t1","workspace_id":"w10","cwd":"%s"},{"pane_id":"w10:p2","tab_id":"w10:t1","workspace_id":"w10","label":"File Tree","cwd":"%s"}]}}\n' "$HERDR_TEST_ROOT" "$HERDR_TEST_ROOT"
+  else
+    sleep 0.1
+    printf '{"result":{"panes":[{"pane_id":"w10:p1","tab_id":"w10:t1","workspace_id":"w10","cwd":"%s"}]}}\n' "$HERDR_TEST_ROOT"
+  fi
+elif [ "$1 $2 $3" = "plugin pane open" ]; then
+  : > "$HERDR_TEST_TREE_MARKER"
+  printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w10:p2","tab_id":"w10:t1"}}}}'
+elif [ "$1 $2" = "pane process-info" ]; then
+  printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":42,"foreground_process_group_id":84,"foreground_processes":[{"name":"file-viewer","argv":["/tmp/plugin/bin/file-viewer","--tree-only"]}]}}}\n' "$4"
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	t.Setenv("HERDR_TEST_TREE_MARKER", filepath.Join(t.TempDir(), "tree-opened"))
+	t.Setenv("HERDR_PLUGIN_ROOT", "/tmp/plugin")
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		errs <- EnsureWorkspaceTree("w10")
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		errs <- RestoreFocusedTab("w10", "w10:t1", root)
+	}()
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(string(logged), "plugin pane open"); count != 1 {
+		t.Fatalf("created and focused hooks opened %d trees; want exactly one:\n%s", count, logged)
+	}
+}
