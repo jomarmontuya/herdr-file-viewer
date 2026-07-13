@@ -310,3 +310,15 @@ func TestNarrowSelectionViewNeverExceedsEditorDimensions(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectionLabelReservesSpaceWhenKeepingCursorVisible(t *testing.T) {
+	m := New("abcdefghijklmnopqrstuvwxyz")
+	m.SetSize(20, 3)
+	m = press(m, tea.KeyMsg{Type: tea.KeyShiftEnd})
+
+	// Width 20 leaves 17 content cells after the gutter. The "26 selected"
+	// label reserves 12, so the cursor at column 26 needs a scroll offset of 22.
+	if m.scrollCol < 22 {
+		t.Fatalf("selection label hid active cursor: scrollCol=%d, want at least 22", m.scrollCol)
+	}
+}
