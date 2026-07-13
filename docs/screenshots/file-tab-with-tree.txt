@@ -1,0 +1,23 @@
+Read-only file tab with its own right-side File Tree
+
+┌──────────────────────────────────────────────────────────────┬──────────────────────────────┐
+│ app.go                                                       │ File Tree — project          │
+│   1 package ui                                               │ ▾ project/                   │
+│   2                                                            │   ▸ .github/                 │
+│   3 import (                                                  │   ▸ cmd/                     │
+│   4     "context"                                             │   ▾ internal/                │
+│   5     "os"                                                  │     ▸ herdr/                 │
+│   6 )                                                          │     ▾ ui/                    │
+│   7                                                            │       app.go             M   │
+│   8 func NewTree(root string) (Model, error) {                │       tree_state.go      M   │
+│   9     return newModel(root, true)                           │     ▸ viewer/                │
+│  10 }                                                          │   README.md                  │
+│                                                              │                              │
+│ q close · ↑↓ scroll · m markdown                             │ ↑↓/jk move · ←→/hl expand    │
+└──────────────────────────────────────────────────────────────┴──────────────────────────────┘
+
+Notes:
+- Clicking a file opens a real Herdr tab.
+- Clicking the same file focuses the existing tab.
+- New file tabs clone the source tree's expanded/collapsed folder state.
+- File-tab trees stay pinned to the project root.

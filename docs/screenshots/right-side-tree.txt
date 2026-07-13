@@ -1,0 +1,23 @@
+Herdr workspace with default right-side File Tree
+
+┌──────────────────────────────────────────────────────────────┬──────────────────────────────┐
+│ ~/project git:(main)                                         │ File Tree — project          │
+│ ❯ codex                                                     │ ▾ project/                   │
+│                                                              │   ▸ .github/                 │
+│                                                              │   ▸ cmd/                     │
+│                                                              │   ▾ internal/                │
+│                                                              │     ▸ herdr/                 │
+│                                                              │     ▸ ui/                    │
+│                                                              │       app.go             M   │
+│                                                              │     ▸ viewer/                │
+│                                                              │       viewer.go          M   │
+│                                                              │   README.md                  │
+│                                                              │                              │
+│                                                              │ ↑↓/jk move · ←→/hl expand    │
+│                                                              │ enter open · r refresh       │
+└──────────────────────────────────────────────────────────────┴──────────────────────────────┘
+
+Notes:
+- The tree opens on the right by default for new workspaces.
+- The default tree follows the source terminal's cwd.
+- Git badges show changed files when the tree root is inside a git repository.

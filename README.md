@@ -48,66 +48,82 @@ sh scripts/fetch-or-build.sh
 herdr plugin link "$PWD"
 ```
 
-## Retained full-viewer preview
+## Current UI snapshots
 
-The upstream-style four-panel mode remains available for direct use, but is not
-the default Herdr plugin pane:
+The installed plugin opens as a narrow right-side tree next to your normal Herdr
+terminal. Opening a file creates or focuses a real Herdr tab; that tab keeps its
+own right-side tree.
 
-![File Viewer running in a Herdr pane](docs/screenshots/browse.png)
+```text
+CLI / Codex pane                                      File Tree
+───────────────────────────────────────────────       ───────────────────────
+~/project git:(main)                                  File Tree — project
+                                                       ▾ project/
+                                                         ▸ .github/
+                                                         ▸ cmd/
+                                                         ▾ internal/
+                                                           ▸ herdr/
+                                                           ▸ ui/
+                                                             app.go         M
+                                                           ▸ viewer/
+                                                             viewer.go      M
+                                                         README.md
+                                                       ↑↓/jk move · ←→ expand
+                                                       enter open · r refresh
+```
 
-Plain-text renders of other views live in
-[`docs/screenshots/`](docs/screenshots).
+More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
 
 ## Features
 
-Three things in one pane:
+- **Right-side file tree by default** — new Herdr workspaces open with the normal
+  CLI pane and a narrow file tree on the right.
+- **Clickable folders and files** — click a folder to expand/collapse it; click a
+  file to open it as a read-only Herdr tab.
+- **Same-file tab reuse** — clicking the same absolute file path focuses its
+  existing tab instead of creating duplicates.
+- **Per-tab right-side trees** — each file tab gets a tree on the right. When a
+  file tab is first created, it clones the source tree's expanded/collapsed
+  folder state.
+- **Live cwd following for default trees** — if the source terminal `cd`s into a
+  different project directory, the default tree re-roots automatically. Press
+  `r` for an immediate recheck.
+- **Pinned trees for file tabs** — trees attached to file tabs stay pinned to the
+  project root, so opening a nested file never scopes the tree down to that
+  file's parent folder.
+- **Git decorations** — modified, untracked, staged, deleted, renamed and
+  conflicted files get editor-style badges. Dirty directories are tinted.
+- **Read-only file tabs** — file tabs keep Herdr's native mouse drag selection
+  and clipboard behavior.
+- **Clickable URLs** — `http://` and `https://` URLs render as terminal
+  hyperlinks, so modified-click opens them in the terminal/browser flow.
+- **Markdown source/render toggle** — `.md` tabs can toggle between rendered
+  markdown and raw source with `m`.
 
-- **File browser** — a navigable, lazily-expanded directory tree with **git
-  status decorations**: modified, new, deleted and renamed files are colored and
-  badged, and directories containing changes are tinted (VS Code style). Click a
-  folder to toggle it; click a file to open a read-only tab in the same Herdr
-  workspace.
-- **Rendered markdown** — `.md` files display as formatted documents (headings,
-  lists, code blocks) via glamour; press `m` to toggle to raw source.
-- **Persistent search panel** — always docked bottom-left. `Ctrl+P` focuses it in
-  fuzzy file-find mode, `Ctrl+F` in content-search mode (with case-sensitive
-  `Aa`, whole-word `ab` and regex `.*` toggles). Arrow keys preview each result
-  live in the file view; `Enter` opens it.
-- **Persistent git panel** — always docked bottom-right, titled with the current
-  branch. Focus it with `g` or `Tab`; press `g` again to toggle between the
-  **commit history** (Enter opens a commit's full multi-file diff) and the
-  **branch list** (Enter switches to the selected branch).
-- **Review / diff view** (`d`) — see a file's changes against `HEAD`. Modified
-  files render **side-by-side** (old on the left, new on the right, changed lines
-  aligned) so you can see exactly what changed; brand-new files render inline as
-  all-additions. Press `s` to toggle the layout; narrow panes fall back to
-  inline automatically.
-
-The search and fuzzy-find engines are **pure Go standard library** — no
-`ripgrep`, no `fzf`. The only external tool is `git`, used solely for the status
-decorations; without it (or outside a repo) the viewer still works, just without
-decorations.
+The only external tool used for decorations is `git`; outside a repo, the tree
+still works without badges.
 
 ## Layout
 
-The browse screen is a fixed four-panel workspace:
+The default Herdr layout is intentionally small:
 
 ```
-┌───────────────┬─────────────────────────────┐
-│ file tree     │ file view (syntax / markdown)│
-│               │                              │
-├───────────────┴──────────────┬──────────────┤
-│ ── FIND FILE / SEARCH ──      │ ── GIT LOG · branch ──
-│ (fuzzy find / content search) │ (commit history)      │
-└───────────────────────────────┴──────────────┘
+┌──────────────────────────────────────────────┬──────────────────────┐
+│ Herdr terminal / Codex / Claude / shell      │ File Tree            │
+│                                              │ ▾ project/           │
+│                                              │   ▸ internal/        │
+│                                              │   README.md          │
+└──────────────────────────────────────────────┴──────────────────────┘
 ```
 
-`Tab` cycles focus through the four panels: tree → file view → search → git log.
-`Alt+h/j/k/l` (or `Alt+arrows`) moves focus by direction. The search and
-git-log panels are always visible.
+The upstream-style four-panel viewer remains available if you run the binary
+without `--tree-only`, but it is not the default installed plugin pane.
 
-The git panel cycles through three views with `g`: **staging** (changed files),
-**branches**, and **commit history**.
+### Legacy full viewer
+
+The original full viewer still has search, git, branch, staging and diff panels.
+Those legacy text renders remain under [`docs/screenshots/`](docs/screenshots)
+for reference, but the public plugin UX is the right-side tree shown above.
 
 ### Staging view (changes)
 
