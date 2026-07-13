@@ -223,7 +223,7 @@ func newModel(root string, treeOnly bool) (Model, error) {
 // mode. The full UI also loads its file, git, and update data.
 func (m Model) Init() tea.Cmd {
 	if m.treeOnly {
-		return tea.Batch(resizeTreePaneCmd(), followTreeCWDCommand(), tickCmd())
+		return tea.Batch(resizeTreePaneCmd(), treeOnlyRefreshCmd(m.root), tickCmd())
 	}
 	return tea.Batch(loadFilesCmd(m.root), loadGitStatusCmd(m.root),
 		loadGitLogCmd(m.root), loadBranchesCmd(m.root), loadChangesCmd(m.root),
@@ -266,6 +266,10 @@ func followTreeCWDCommand() tea.Cmd {
 		root, err := herdr.PaneCWD(workspaceID, paneID)
 		return treeCWDMsg{root: root, err: err}
 	}
+}
+
+func treeOnlyRefreshCmd(root string) tea.Cmd {
+	return tea.Batch(loadGitStatusCmd(root), followTreeCWDCommand())
 }
 
 // --- commands ---------------------------------------------------------------
@@ -470,7 +474,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.statusNote = ""
-		return m, nil
+		return m, loadGitStatusCmd(m.root)
 
 	case highlightMsg:
 		if msg.gen == m.highlightGen {
@@ -493,7 +497,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// then schedule the next tick.
 		m.tree.Refresh()
 		if m.treeOnly {
-			return m, tea.Batch(followTreeCWDCommand(), tickCmd())
+			return m, tea.Batch(treeOnlyRefreshCmd(m.root), tickCmd())
 		}
 		return m, tea.Batch(autoRefreshCmd(m.root), tickCmd())
 
@@ -586,7 +590,7 @@ func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.tree.Refresh()
 		m.persistTreeState()
-		return m, followTreeCWDCommand()
+		return m, treeOnlyRefreshCmd(m.root)
 	case "up", "k":
 		m.tree.MoveUp()
 	case "down", "j":
