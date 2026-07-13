@@ -297,6 +297,44 @@ func TestTreeOnlyPersistsExpandedFoldersAndSelectionAcrossRestart(t *testing.T) 
 	}
 }
 
+func TestTreeOnlyClonesSourceTabStateForNewFileTabTree(t *testing.T) {
+	root := fixtureRoot(t)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	t.Setenv("HERDR_WORKSPACE_ID", "w-clone")
+	t.Setenv("HERDR_TAB_ID", "w-clone:t-source")
+
+	source, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.ready = true
+	source.width, source.height = 60, 24
+	next, _ := source.handleTreeKey(tea.KeyMsg{Type: tea.KeyDown})
+	source = next.(Model)
+	next, _ = source.handleTreeKey(tea.KeyMsg{Type: tea.KeyRight})
+	source = next.(Model)
+	next, _ = source.handleTreeKey(tea.KeyMsg{Type: tea.KeyDown})
+	source = next.(Model)
+	if n := source.tree.Selected(); n == nil || n.Path != filepath.Join(root, "docs", "readme.md") {
+		t.Fatalf("test setup should select expanded docs/readme.md, got %+v", n)
+	}
+
+	t.Setenv("HERDR_TAB_ID", "w-clone:t-new-file")
+	t.Setenv("HERDR_TREE_STATE_SOURCE_TAB_ID", "w-clone:t-source")
+	cloned, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := cloned.tree.Selected()
+	if n == nil || n.Path != filepath.Join(root, "docs", "readme.md") {
+		t.Fatalf("new file-tab tree did not clone selected row: %+v", n)
+	}
+	docs := cloned.tree.Visible()[1]
+	if docs.Name != "docs" || !docs.Expanded {
+		t.Fatalf("new file-tab tree did not clone expanded folders: %+v", docs)
+	}
+}
+
 func TestTreeOnlyIgnoresCorruptOrDifferentRootState(t *testing.T) {
 	stateDir := t.TempDir()
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", stateDir)

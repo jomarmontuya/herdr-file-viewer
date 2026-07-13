@@ -127,6 +127,41 @@ else
 	}
 }
 
+func TestOpenFileTabAttachesTreeWithSourceTabState(t *testing.T) {
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint file"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p8","tab_id":"w2:t8"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w2:p9","tab_id":"w2:t8"}}}}'
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"tab_renamed"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	t.Setenv("HERDR_TAB_ID", "w2:t-source")
+	root := t.TempDir()
+	path := filepath.Join(root, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := OpenFileTab("w2", path, root); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "--env HERDR_TREE_STATE_SOURCE_TAB_ID=w2:t-source"
+	if !strings.Contains(string(logged), want) {
+		t.Fatalf("attached file-tab tree should clone source tree state\nwant: %s\ngot:\n%s", want, logged)
+	}
+}
+
 func TestOpenFileTabReusesExistingTabForSamePath(t *testing.T) {
 	_, logPath := fakeHerdr(t, `
 if [ "$1 $2 $3" = "plugin pane open" ]; then
