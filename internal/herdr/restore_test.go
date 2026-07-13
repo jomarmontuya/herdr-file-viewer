@@ -159,6 +159,39 @@ fi`)
 	}
 }
 
+func TestRestoreUnrecoverableFilePaneKeepsTreePinned(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_TEST_ROOT", root)
+	t.Setenv("HERDR_TEST_NESTED", nested)
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2" = "pane list" ]; then
+  printf '{"result":{"panes":[{"pane_id":"w7:p-file","tab_id":"w7:t2","workspace_id":"w7","label":"File","cwd":"%s"},{"pane_id":"w7:p-tree","tab_id":"w7:t2","workspace_id":"w7","label":"File Tree","cwd":"%s"}]}}\n' "$HERDR_TEST_NESTED" "$HERDR_TEST_ROOT"
+elif [ "$1 $2" = "tab get" ]; then
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w7:t2","workspace_id":"w7","label":"missing.go","pane_count":2}}}'
+elif [ "$1 $2" = "pane process-info" ]; then
+  printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":42,"foreground_process_group_id":42,"foreground_processes":[{"name":"zsh","argv":["-zsh"]}]}}}\n' "$4"
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	t.Setenv("HERDR_PLUGIN_ROOT", "/tmp/plugin")
+
+	if err := RestoreFocusedTab("w7", "w7:t2", root); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(logged), "HERDR_TREE_FOLLOW_PANE_ID") {
+		t.Fatalf("a file pane must never become the default tree cwd source, even when its file path cannot be recovered:\n%s", logged)
+	}
+}
+
 func TestRestoreFocusedTabRejectsMissingContext(t *testing.T) {
 	for name, ids := range map[string][2]string{
 		"workspace": {"", "w1:t1"},
