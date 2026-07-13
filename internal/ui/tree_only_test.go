@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitstatus"
 )
 
 func TestTreeOnlyRequestsNarrowRightSidebar(t *testing.T) {
@@ -256,6 +259,93 @@ func TestTreeOnlyKeyboardNavigationAndOpen(t *testing.T) {
 	_, quit := m.handleTreeKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if quit == nil {
 		t.Fatal("q should close the tree pane")
+	}
+}
+
+func TestTreeOnlyMouseWheelScrollsFilesWithoutMovingCursor(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 24; i++ {
+		name := filepath.Join(root, fmt.Sprintf("file-%02d.txt", i))
+		if err := os.WriteFile(name, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = send(m, tea.WindowSizeMsg{Width: 44, Height: 10}).(Model)
+	initialCursor := m.tree.Cursor()
+
+	next, _ := m.Update(tea.MouseMsg{
+		X: 2, Y: 4, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress,
+	})
+	m = next.(Model)
+	if m.treeScroll == 0 {
+		t.Fatal("mouse wheel down should advance the Files viewport")
+	}
+	if got := m.tree.Cursor(); got != initialCursor {
+		t.Fatalf("wheel scrolling moved keyboard cursor: got %d, want %d", got, initialCursor)
+	}
+	view := ansiRe.ReplaceAllString(m.View(), "")
+	if strings.Contains(view, "file-00.txt") || !strings.Contains(view, "file-02.txt") {
+		t.Fatalf("wheel did not reveal later file rows:\n%s", view)
+	}
+
+	// Click mapping must use the scrolled viewport, not the hidden cursor row.
+	next, cmd := m.Update(tea.MouseMsg{
+		X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress,
+	})
+	m = next.(Model)
+	if cmd == nil || m.tree.Selected() == nil || m.tree.Selected().Name != "file-02.txt" {
+		t.Fatalf("click after wheel scroll selected %+v, want file-02.txt", m.tree.Selected())
+	}
+
+	for i := 0; i < 20; i++ {
+		next, _ = m.Update(tea.MouseMsg{X: 2, Y: 4, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+		m = next.(Model)
+	}
+	if m.treeScroll != 0 {
+		t.Fatalf("wheel up should clamp at the first row, got offset %d", m.treeScroll)
+	}
+}
+
+func TestTreeOnlyMouseWheelScrollsSourceControlWithoutMovingSelection(t *testing.T) {
+	m, err := NewTree(fixtureRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := make([]gitstatus.Change, 20)
+	for i := range changes {
+		changes[i] = gitstatus.Change{Path: fmt.Sprintf("change-%02d.ts", i), Index: ' ', Work: 'M'}
+	}
+	m = send(m, tea.WindowSizeMsg{Width: 44, Height: 10}).(Model)
+	m = send(m, gitChangesMsg{changes: changes}).(Model)
+	m.treeView = treeViewSourceControl
+	initialCursor := m.sourceControlCursor
+
+	next, _ := m.Update(tea.MouseMsg{
+		X: 2, Y: 4, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress,
+	})
+	m = next.(Model)
+	if m.sourceControlScroll == 0 {
+		t.Fatal("mouse wheel down should advance the Source Control viewport")
+	}
+	if m.sourceControlCursor != initialCursor {
+		t.Fatalf("wheel scrolling moved Source Control selection: got %d, want %d", m.sourceControlCursor, initialCursor)
+	}
+	view := ansiRe.ReplaceAllString(m.View(), "")
+	if strings.Contains(view, "change-00.ts") || !strings.Contains(view, "change-01.ts") {
+		t.Fatalf("wheel did not reveal later change rows:\n%s", view)
+	}
+
+	next, cmd := m.Update(tea.MouseMsg{
+		X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress,
+	})
+	m = next.(Model)
+	selected, ok := m.selectedSourceControlLine()
+	if cmd == nil || !ok || selected.change.Path != "change-01.ts" {
+		t.Fatalf("click after wheel selected %+v, want change-01.ts", selected)
 	}
 }
 

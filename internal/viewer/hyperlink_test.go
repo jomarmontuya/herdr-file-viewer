@@ -7,23 +7,25 @@ import (
 	"testing"
 )
 
-func TestTerminalHyperlinksWrapsHTTPURLs(t *testing.T) {
-	got := terminalHyperlinks("visit https://example.com/docs?q=1")
-	want := "\x1b]8;;https://example.com/docs?q=1\x1b\\https://example.com/docs?q=1\x1b]8;;\x1b\\"
-	if !strings.Contains(got, want) {
-		t.Fatalf("URL was not wrapped as an OSC 8 hyperlink:\n%q", got)
+func TestTerminalHyperlinksLeavesOneHerdrDetectableURL(t *testing.T) {
+	input := "visit https://example.com/docs?q=1"
+	got := terminalHyperlinks(input)
+	if got != input {
+		t.Fatalf("visible URL must remain the only Herdr link source:\nwant %q\ngot  %q", input, got)
+	}
+	if strings.Contains(got, "\x1b]8;;") {
+		t.Fatalf("explicit OSC 8 plus Herdr visible-URL detection opens two tabs:\n%q", got)
 	}
 }
 
 func TestTerminalHyperlinksLeavesTrailingSentencePunctuationOutsideLink(t *testing.T) {
-	got := terminalHyperlinks("see https://example.com/docs.")
-	want := "\x1b]8;;https://example.com/docs\x1b\\https://example.com/docs\x1b]8;;\x1b\\."
-	if !strings.Contains(got, want) {
-		t.Fatalf("trailing punctuation should not be part of the URL:\n%q", got)
+	input := "see https://example.com/docs."
+	if got := terminalHyperlinks(input); got != input {
+		t.Fatalf("host-detected URL text and punctuation should remain unchanged:\n%q", got)
 	}
 }
 
-func TestViewerRendersPlainURLsAsTerminalHyperlinks(t *testing.T) {
+func TestViewerRendersOneHostDetectablePlainURL(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "links.txt")
 	if err := os.WriteFile(path, []byte("open https://example.com\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -32,7 +34,10 @@ func TestViewerRendersPlainURLsAsTerminalHyperlinks(t *testing.T) {
 	m.Load(path)
 	m.SetSize(80, 12)
 	view := m.View()
-	if !strings.Contains(view, "\x1b]8;;https://example.com\x1b\\https://example.com\x1b]8;;\x1b\\") {
-		t.Fatalf("viewer did not render URL as terminal hyperlink:\n%q", view)
+	if !strings.Contains(view, "https://example.com") {
+		t.Fatalf("viewer dropped the host-detectable URL:\n%q", view)
+	}
+	if strings.Contains(view, "\x1b]8;;") {
+		t.Fatalf("viewer emitted a second OSC 8 activation source:\n%q", view)
 	}
 }
