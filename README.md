@@ -94,7 +94,8 @@ More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
 - **Git decorations** — modified, untracked, staged, deleted, renamed and
   conflicted files get editor-style badges. Dirty directories are tinted.
 - **Editable file tabs** — file tabs stay read-only by default for Herdr's native
-  mouse drag selection, then switch into a simple in-pane editor with `e`.
+  mouse drag selection, then switch into an in-pane editor with conventional
+  keyboard selection, word movement, clipboard, save and cancel shortcuts.
 - **Clickable URLs** — `http://` and `https://` URLs render as terminal
   hyperlinks, so modified-click opens them in the terminal/browser flow.
 - **Markdown source/render toggle** — `.md` tabs can toggle between rendered
@@ -197,6 +198,17 @@ red inside the panel — nothing silently fails.
 | Key | Action |
 |-----|--------|
 | `e` | Enter in-pane edit mode |
+| `Arrow keys` | Move by character or line |
+| `Shift+Arrow` | Extend the text selection by character or line |
+| `Ctrl+←` / `Ctrl+→` | Move by word |
+| `Option+←` / `Option+→` | Move by word on terminals that send Option as Alt |
+| `Ctrl/Option+Shift+←/→` | Extend the selection by word |
+| `Home` / `End` | Move to the start / end of the current line |
+| `Ctrl+Home` / `Ctrl+End` | Move to the start / end of the file |
+| `Shift` plus `Home` / `End` | Extend the selection to that boundary |
+| `Ctrl+A` | Select all text |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste |
+| `Backspace` / `Delete` | Delete the selection, or the adjacent character |
 | `Ctrl+S` | Save the edited file and return to viewer mode |
 | `Esc` | Cancel edit mode without writing changes |
 | `m` | Toggle rendered markdown ↔ source while in viewer mode |
@@ -205,6 +217,10 @@ red inside the panel — nothing silently fails.
 File tabs intentionally open in viewer mode first. That keeps text selection,
 clipboard copying and terminal hyperlinks working like Herdr core until you
 explicitly press `e`.
+
+Terminal applications do not receive macOS `Command` shortcuts reliably, so
+edit mode uses `Ctrl` aliases. Option-word movement works when the terminal is
+configured to send Option as Alt/Esc, which is Herdr's normal compatible path.
 
 ### Review / diff view (`d`)
 
