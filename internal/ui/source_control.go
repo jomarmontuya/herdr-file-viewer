@@ -50,6 +50,7 @@ func (m *Model) setSourceControlChanges(changes []gitstatus.Change) {
 			break
 		}
 	}
+	m.clampSourceControlScroll()
 }
 
 func buildSourceControlLines(changes []gitstatus.Change) []sourceControlLine {
@@ -105,6 +106,9 @@ func (m *Model) moveSourceControl(delta int) {
 }
 
 func (m Model) sourceControlStart(height int) int {
+	if m.treeOnly {
+		return clampScrollStart(m.sourceControlScroll, len(m.sourceControlLines), height)
+	}
 	return scrollStart(m.sourceControlCursor, len(m.sourceControlLines), height)
 }
 

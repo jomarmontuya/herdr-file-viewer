@@ -88,9 +88,11 @@ type Model struct {
 
 	tree                *explorer.Tree
 	treeView            treeView
+	treeScroll          int
 	sourceChanges       []gitstatus.Change
 	sourceControlLines  []sourceControlLine
 	sourceControlCursor int
+	sourceControlScroll int
 	viewer              viewer.Model
 	finder              finderPanel
 	search              searchPanel
@@ -414,9 +416,18 @@ func runSearchCmd(ctx context.Context, gen int, root string, opts search.Options
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		wasReady := m.ready
 		m.width, m.height = msg.Width, msg.Height
 		m.ready = true
-		if !m.treeOnly {
+		if m.treeOnly {
+			if wasReady {
+				m.clampTreeScroll()
+				m.clampSourceControlScroll()
+			} else {
+				m.revealTreeCursor()
+				m.revealSourceControlCursor()
+			}
+		} else {
 			m.layout()
 		}
 		return m, nil
@@ -532,6 +543,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// then schedule the next tick.
 		m.tree.Refresh()
 		if m.treeOnly {
+			m.clampTreeScroll()
+			m.clampSourceControlScroll()
 			return m, tea.Batch(treeOnlyRefreshCmd(m.root), tickCmd())
 		}
 		return m, tea.Batch(autoRefreshCmd(m.root), tickCmd())
@@ -546,14 +559,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.forwardToActive(msg)
 }
 
+func (m Model) treeBodyHeight() int {
+	return max(1, m.height-2)
+}
+
+func (m Model) treeStart(height int) int {
+	if m.treeOnly {
+		return clampScrollStart(m.treeScroll, len(m.tree.Visible()), height)
+	}
+	return scrollStart(m.tree.Cursor(), len(m.tree.Visible()), height)
+}
+
+func (m *Model) clampTreeScroll() {
+	m.treeScroll = clampScrollStart(m.treeScroll, len(m.tree.Visible()), m.treeBodyHeight())
+}
+
+func (m *Model) revealTreeCursor() {
+	m.treeScroll = revealScrollStart(m.treeScroll, m.tree.Cursor(), len(m.tree.Visible()), m.treeBodyHeight())
+}
+
+func (m *Model) clampSourceControlScroll() {
+	m.sourceControlScroll = clampScrollStart(m.sourceControlScroll, len(m.sourceControlLines), m.treeBodyHeight())
+}
+
+func (m *Model) revealSourceControlCursor() {
+	m.sourceControlScroll = revealScrollStart(m.sourceControlScroll, m.sourceControlCursor, len(m.sourceControlLines), m.treeBodyHeight())
+}
+
 // handleMouse maps a left click in the visible explorer region back to the
 // exact tree row. Directories toggle; files open as real Herdr tabs.
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if !m.ready || m.mode != modeBrowse || m.pickerActive || m.prompt != opNone || m.confirm != opNone {
 		return m, nil
-	}
-	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
-		return m.forwardToActive(msg)
 	}
 	topH := m.height - 2
 	clickWidth := m.width
@@ -565,6 +602,26 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		topH = 1
 	}
 	row := msg.Y - 1 // terminal row 0 is the app header
+	if m.treeOnly && msg.Action == tea.MouseActionPress && row >= 0 && row < topH && msg.X >= 0 && msg.X < m.width-activityRailWidth {
+		delta := 0
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			delta = -3
+		case tea.MouseButtonWheelDown:
+			delta = 3
+		}
+		if delta != 0 {
+			if m.treeView == treeViewSourceControl {
+				m.sourceControlScroll = clampScrollStart(m.sourceControlScroll+delta, len(m.sourceControlLines), topH)
+			} else {
+				m.treeScroll = clampScrollStart(m.treeScroll+delta, len(m.tree.Visible()), topH)
+			}
+			return m, nil
+		}
+	}
+	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		return m.forwardToActive(msg)
+	}
 	if m.treeOnly && msg.X >= m.width-activityRailWidth && msg.X < m.width && row >= 0 && row < topH {
 		switch row {
 		case activityFilesRow:
@@ -592,7 +649,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.forwardToActive(msg)
 	}
 	nodes := m.tree.Visible()
-	index := scrollStart(m.tree.Cursor(), len(nodes), topH) + row
+	index := m.treeStart(topH) + row
 	if index < 0 || index >= len(nodes) {
 		return m, nil
 	}
@@ -605,6 +662,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	if n.IsDir {
 		m.tree.Toggle()
+		m.revealTreeCursor()
 		m.persistTreeState()
 		return m, nil
 	}
@@ -667,8 +725,10 @@ func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, treeOnlyRefreshCmd(m.root)
 		case "up", "k":
 			m.moveSourceControl(-1)
+			m.revealSourceControlCursor()
 		case "down", "j":
 			m.moveSourceControl(1)
+			m.revealSourceControlCursor()
 		case "enter", " ":
 			return m, m.openSelectedDiffTab()
 		}
@@ -684,16 +744,20 @@ func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, treeOnlyRefreshCmd(m.root)
 	case "up", "k":
 		m.tree.MoveUp()
+		m.revealTreeCursor()
 	case "down", "j":
 		m.tree.MoveDown()
+		m.revealTreeCursor()
 	case "left", "h":
 		if n := m.tree.Selected(); n != nil && n.IsDir && n.Expanded {
 			m.tree.Toggle()
+			m.revealTreeCursor()
 		}
 	case "right", "l", "enter", " ":
 		if n := m.tree.Selected(); n != nil {
 			if n.IsDir {
 				m.tree.Toggle()
+				m.revealTreeCursor()
 			} else {
 				m.persistTreeState()
 				return m, m.openSelectedFileTab()
@@ -719,6 +783,8 @@ func (m *Model) reRootTree(root string) error {
 	m.persistTreeState()
 	m.root = abs
 	m.tree = tree
+	m.treeScroll = 0
+	m.sourceControlScroll = 0
 	m.currentFile = ""
 	m.restoreTreeState()
 	m.persistTreeState()
@@ -1782,7 +1848,7 @@ func (m Model) headerText() string {
 func (m Model) renderExplorer(width, height int) string {
 	nodes := m.tree.Visible()
 	cursor := m.tree.Cursor()
-	start := scrollStart(cursor, len(nodes), height)
+	start := m.treeStart(height)
 
 	var b strings.Builder
 	for i := start; i < start+height && i < len(nodes); i++ {

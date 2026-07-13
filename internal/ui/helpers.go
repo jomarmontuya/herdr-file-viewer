@@ -23,6 +23,28 @@ func scrollStart(cursor, total, rows int) int {
 	return start
 }
 
+// clampScrollStart keeps a manually controlled viewport within its content.
+func clampScrollStart(start, total, rows int) int {
+	if rows < 1 || total <= rows {
+		return 0
+	}
+	return max(0, min(start, total-rows))
+}
+
+// revealScrollStart moves a viewport only far enough to show the keyboard
+// cursor. Mouse-wheel scrolling intentionally does not call this helper, so the
+// viewport can move independently from selection.
+func revealScrollStart(start, cursor, total, rows int) int {
+	start = clampScrollStart(start, total, rows)
+	if cursor < start {
+		return clampScrollStart(cursor, total, rows)
+	}
+	if cursor >= start+rows {
+		return clampScrollStart(cursor-rows+1, total, rows)
+	}
+	return start
+}
+
 // truncateLine cuts a rendered line to width display cells without breaking
 // ANSI escape sequences, using lipgloss's width-aware truncation.
 func truncateLine(s string, width int) string {
