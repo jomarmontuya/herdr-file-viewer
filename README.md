@@ -242,7 +242,9 @@ gets its own narrow tree split on the right. Clicking the same absolute path in
 the same workspace focuses its existing tab; closed-tab records are detected
 and replaced automatically. After a full Herdr restart, focusing a restored tab
 rehydrates its saved file and tree inside the existing panes. Each tab also
-remembers its expanded folders and selected tree row.
+remembers its expanded folders and selected tree row. In a file tab, drag across
+text with the mouse and release to use Herdr's native highlight-and-copy behavior;
+the selected text is placed on the clipboard automatically.
 
 ## Editing files
 
