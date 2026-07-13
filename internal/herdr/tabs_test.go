@@ -129,6 +129,53 @@ fi`)
 	}
 }
 
+func TestOpenDiffTabValidatesInputsAndRollsBackFailedTree(t *testing.T) {
+	for name, args := range map[string]struct {
+		workspace string
+		path      string
+		root      string
+		mode      gitdiff.Mode
+	}{
+		"workspace": {path: "/tmp/a.go", root: "/tmp", mode: gitdiff.ModeStaged},
+		"path":      {workspace: "w1", root: "/tmp", mode: gitdiff.ModeStaged},
+		"root":      {workspace: "w1", path: "/tmp/a.go", mode: gitdiff.ModeStaged},
+		"mode":      {workspace: "w1", path: "/tmp/a.go", root: "/tmp", mode: gitdiff.ModeHead},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := OpenDiffTab(args.workspace, args.path, args.root, args.mode); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+
+	_, logPath := fakeHerdr(t, `
+if [ "$1 $2 $3" = "plugin pane open" ]; then
+  case "$*" in
+    *"--entrypoint diff"*)
+      printf '%s\n' '{"result":{"plugin_pane":{"pane":{"pane_id":"w8:p-diff","tab_id":"w8:t-diff"}}}}'
+      ;;
+    *)
+      printf '%s\n' 'tree failed' >&2
+      exit 8
+      ;;
+  esac
+else
+  printf '%s\n' '{"result":{"type":"ok"}}'
+fi`)
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	err := OpenDiffTab("w8", "/tmp/a.go", "/tmp", gitdiff.ModeWorktree)
+	if err == nil || !strings.Contains(err.Error(), "tree failed") {
+		t.Fatalf("expected tree attachment failure, got %v", err)
+	}
+	logged, readErr := os.ReadFile(logPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(logged), "tab close w8:t-diff") {
+		t.Fatalf("failed diff tab must be rolled back:\n%s", logged)
+	}
+}
+
 func TestParseOpenedTabID(t *testing.T) {
 	raw := []byte(`{"result":{"plugin_pane":{"pane":{"pane_id":"w7:p3","tab_id":"w7:t9"}}}}`)
 	got, err := parseOpenedTabID(raw)
