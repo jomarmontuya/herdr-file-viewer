@@ -2,6 +2,7 @@ package ui
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -71,6 +72,45 @@ func TestTreeOnlyRendersOnlyTheExplorer(t *testing.T) {
 		if strings.Contains(view, unwanted) {
 			t.Fatalf("tree-only pane should remove %q:\n%s", unwanted, view)
 		}
+	}
+}
+
+func TestTreeOnlyManualRefreshLoadsGitDecorations(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	root := fixtureRoot(t)
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("add", ".")
+	run("commit", "-m", "initial")
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main() { changed() }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := NewTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.ready = true
+	m.width, m.height = 60, 24
+	next, cmd := m.handleTreeKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if cmd == nil {
+		t.Fatal("tree-only refresh should reload git status decorations")
+	}
+	msg := cmd()
+	next, _ = next.Update(msg)
+	view := ansiRe.ReplaceAllString(next.(Model).View(), "")
+	if !strings.Contains(view, "main.go") || !strings.Contains(view, "M") {
+		t.Fatalf("tree-only refresh did not render modified-file badge:\n%s", view)
 	}
 }
 
