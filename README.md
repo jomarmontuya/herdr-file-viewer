@@ -209,6 +209,11 @@ herdr plugin link "$PWD"
 New Herdr projects automatically open with their normal CLI pane on the left
 and the narrow file tree on the right. The tree does not steal focus. Existing
 projects can still open or restore the same layout through the actions below.
+For the default new-project tree, the root follows the source CLI pane's live
+working directory. If you `cd` from one project into another, the tree re-roots
+automatically within a couple seconds; press `r` in the tree for an immediate
+recheck. Trees attached to file tabs stay pinned to the project root so opening
+a nested file never scopes the sidebar down to that file's parent folder.
 
 The manifest exposes two actions in Herdr's action menu:
 **Open File Tree** / **Open File Tree (tab)**. This fork's plugin pane renders
