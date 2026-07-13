@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestFileTabRendersSelectedFileAndCloses(t *testing.T) {
@@ -216,5 +217,31 @@ func TestFileTabEditModeRoutesKeyboardSelectionIntoSavedContent(t *testing.T) {
 	}
 	if string(got) != "new value\n" {
 		t.Fatalf("saved content = %q, want keyboard-selected text replaced", got)
+	}
+}
+
+func TestFileTabEditModeStaysInsideANarrowPane(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(path, []byte("wide selected content\nnext\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 10, Height: 6})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftEnd})
+
+	view := model.View()
+	rows := strings.Split(view, "\n")
+	if len(rows) > 6 {
+		t.Fatalf("file tab rendered %d rows into a 6-row pane:\n%s", len(rows), view)
+	}
+	for i, row := range rows {
+		if got := lipgloss.Width(row); got > 10 {
+			t.Fatalf("row %d width = %d, exceeds pane width 10:\n%s", i+1, got, view)
+		}
 	}
 }
