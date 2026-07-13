@@ -432,6 +432,12 @@ func (m *Model) ensureVisible() {
 	start, _ := m.lineBounds(m.cursor)
 	cursorCol := runewidth.StringWidth(string(m.value[start:m.cursor]))
 	contentWidth := m.contentWidth()
+	if label := m.selectionLabel(); label != "" && line == m.scrollLine {
+		labelWidth := runewidth.StringWidth(label)
+		if contentWidth > labelWidth+1 {
+			contentWidth -= labelWidth + 1
+		}
+	}
 	if cursorCol < m.scrollCol {
 		m.scrollCol = cursorCol
 	}
@@ -444,28 +450,38 @@ func (m *Model) ensureVisible() {
 }
 
 func (m Model) contentWidth() int {
-	gutter := len(fmt.Sprintf("%d", len(lineStarts(m.value)))) + 2
-	return max(1, m.width-gutter)
+	_, content := m.layoutWidths()
+	return content
+}
+
+func (m Model) layoutWidths() (int, int) {
+	desiredGutter := len(fmt.Sprintf("%d", len(lineStarts(m.value)))) + 2
+	gutter := min(desiredGutter, max(0, m.width-1))
+	return gutter, max(1, m.width-gutter)
+}
+
+func (m Model) selectionLabel() string {
+	if n := m.SelectionLen(); n > 0 {
+		return fmt.Sprintf("%d selected", n)
+	}
+	return ""
 }
 
 // View renders a line-numbered editor with a visible selection and cursor.
 func (m Model) View() string {
 	starts := lineStarts(m.value)
 	lineNumberWidth := len(fmt.Sprintf("%d", len(starts)))
-	gutterWidth := lineNumberWidth + 2
-	contentWidth := max(1, m.width-gutterWidth)
+	gutterWidth, contentWidth := m.layoutWidths()
 	currentLine, _ := m.lineAndColumn(m.cursor)
 	selectionStart, selectionEnd, hasSelection := m.selection()
-	selectionLabel := ""
-	if n := m.SelectionLen(); n > 0 {
-		selectionLabel = fmt.Sprintf("%d selected", n)
-	}
+	selectionLabel := m.selectionLabel()
 
 	rows := make([]string, 0, m.height)
 	for screenRow := 0; screenRow < m.height; screenRow++ {
 		line := m.scrollLine + screenRow
 		if line >= len(starts) {
-			rows = append(rows, lineNumberStyle.Render(strings.Repeat(" ", lineNumberWidth)+" ~"))
+			gutter := fitPlain(strings.Repeat(" ", lineNumberWidth)+" ~", gutterWidth)
+			rows = append(rows, lineNumberStyle.Render(gutter)+strings.Repeat(" ", contentWidth))
 			continue
 		}
 
@@ -474,7 +490,7 @@ func (m Model) View() string {
 		if line+1 < len(starts) {
 			lineEnd = starts[line+1] - 1
 		}
-		lineNumber := fmt.Sprintf("%*d ", lineNumberWidth, line+1)
+		lineNumber := fitPlain(fmt.Sprintf("%*d ", lineNumberWidth, line+1), gutterWidth)
 		if line == currentLine {
 			lineNumber = currentLineNumberStyle.Render(lineNumber)
 		} else {
@@ -482,14 +498,16 @@ func (m Model) View() string {
 		}
 
 		available := contentWidth
-		if screenRow == 0 && selectionLabel != "" && available > runewidth.StringWidth(selectionLabel)+1 {
-			available -= runewidth.StringWidth(selectionLabel) + 1
+		labelWidth := runewidth.StringWidth(selectionLabel)
+		showSelectionLabel := screenRow == 0 && selectionLabel != "" && available > labelWidth+1
+		if showSelectionLabel {
+			available -= labelWidth + 1
 		}
 		content := m.renderLine(lineStart, lineEnd, available, selectionStart, selectionEnd, hasSelection)
 		row := lineNumber + content
-		if screenRow == 0 && selectionLabel != "" {
+		if showSelectionLabel {
 			used := gutterWidth + lipgloss.Width(content)
-			padding := max(1, m.width-used-runewidth.StringWidth(selectionLabel))
+			padding := max(1, m.width-used-labelWidth)
 			row += strings.Repeat(" ", padding) + selectionCountStyle.Render(selectionLabel)
 		}
 		rows = append(rows, row)
@@ -549,4 +567,18 @@ func (m Model) renderLine(lineStart, lineEnd, width, selectionStart, selectionEn
 
 func clamp(value, low, high int) int {
 	return min(max(value, low), high)
+}
+
+func fitPlain(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) > width {
+		runes = runes[len(runes)-width:]
+	}
+	if len(runes) < width {
+		return strings.Repeat(" ", width-len(runes)) + string(runes)
+	}
+	return string(runes)
 }

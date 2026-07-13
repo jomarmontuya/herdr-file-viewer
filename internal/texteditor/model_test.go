@@ -280,9 +280,12 @@ func TestHorizontalScrollRendersTabsWideRunesAndSelectedNewline(t *testing.T) {
 		t.Fatal("long selected line should scroll horizontally to keep the cursor visible")
 	}
 	m = press(m, tea.KeyMsg{Type: tea.KeyShiftRight})
+	if got := m.SelectedText(); got != "\twide🙂text\n" {
+		t.Fatalf("selected range = %q, want first line and newline", got)
+	}
 	view := m.View()
-	if !strings.Contains(view, "selected") || !strings.Contains(view, "next") {
-		t.Fatalf("scrolled selection view lost state or following line:\n%s", view)
+	if !strings.Contains(view, "next") {
+		t.Fatalf("scrolled selection view lost the following line:\n%s", view)
 	}
 
 	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlShiftEnd})

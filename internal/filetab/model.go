@@ -102,7 +102,7 @@ func (m Model) View() string {
 	foot := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("245")).
 		Width(m.width).
-		Render(help)
+		Render(truncate(help, m.width))
 	return lipgloss.JoinVertical(lipgloss.Left, m.viewer.View(), strings.TrimSuffix(foot, "\n"))
 }
 
@@ -175,7 +175,7 @@ func (m *Model) resizeEditor() {
 }
 
 func (m Model) editView() string {
-	title := "  " + filepath.Base(m.viewer.Path()) + "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("[editing]")
+	title := "  " + filepath.Base(m.viewer.Path()) + "  [editing]"
 	bar := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("111")).
 		Bold(true).
@@ -194,7 +194,7 @@ func (m Model) editView() string {
 	foot := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("245")).
 		Width(m.width).
-		Render(help)
+		Render(truncate(help, m.width))
 	return lipgloss.JoinVertical(lipgloss.Left, bar, m.edit.View(), strings.TrimSuffix(foot, "\n"))
 }
 
