@@ -292,6 +292,12 @@ func TestTreeOnlyMouseWheelScrollsFilesWithoutMovingCursor(t *testing.T) {
 		t.Fatalf("wheel did not reveal later file rows:\n%s", view)
 	}
 
+	// Resizing clamps the independent viewport without corrupting selection.
+	resized := send(m, tea.WindowSizeMsg{Width: 44, Height: 40}).(Model)
+	if resized.treeScroll != 0 || resized.tree.Cursor() != initialCursor {
+		t.Fatalf("resize did not clamp viewport safely: offset=%d cursor=%d", resized.treeScroll, resized.tree.Cursor())
+	}
+
 	// Click mapping must use the scrolled viewport, not the hidden cursor row.
 	next, cmd := m.Update(tea.MouseMsg{
 		X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress,
