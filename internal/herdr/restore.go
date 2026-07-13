@@ -100,7 +100,7 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 		}
 	}
 	followPaneID := ""
-	if path == "" {
+	if filePane.PaneID == "" {
 		followPaneID = target.PaneID
 	}
 
