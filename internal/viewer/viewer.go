@@ -206,7 +206,7 @@ func (m *Model) render() {
 		return
 	}
 	if m.markdownActive() {
-		m.vp.SetContent(renderMarkdown(m.raw, m.vp.Width))
+		m.vp.SetContent(terminalHyperlinks(renderMarkdown(m.raw, m.vp.Width)))
 		return
 	}
 	if len(m.lines) == 0 {
@@ -229,7 +229,7 @@ func (m *Model) render() {
 		} else {
 			gutter = m.gutterFg.Render(fmt.Sprintf(" %*d ", gutterW, n))
 		}
-		b.WriteString(gutter + expandTabs(line))
+		b.WriteString(gutter + terminalHyperlinks(expandTabs(line)))
 		if i < len(content)-1 {
 			b.WriteByte('\n')
 		}
