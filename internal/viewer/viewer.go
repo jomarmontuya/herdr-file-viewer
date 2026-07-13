@@ -159,6 +159,11 @@ func (m Model) Raw() string { return m.raw }
 // Path returns the loaded file's path.
 func (m Model) Path() string { return m.path }
 
+// Editable reports whether the loaded file can be edited in-place. It excludes
+// directories, binary files, oversized files, and read errors because those are
+// represented as load errors by Load.
+func (m Model) Editable() bool { return m.path != "" && m.loadErr == "" }
+
 // ShouldHighlight reports whether the current file wants async syntax
 // highlighting (a readable text file not being shown as rendered markdown).
 func (m Model) ShouldHighlight() bool {
