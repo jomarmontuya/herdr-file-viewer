@@ -16,6 +16,17 @@ command = ["sh", "scripts/fetch-or-build.sh"]
 on = "workspace.created"
 command = ["./bin/file-viewer", "--workspace-created"]
 
+# Herdr persists tab/pane geometry across a full server restart, then restores
+# each pane as a fresh shell. Rehydrate the focused saved layout in-place so
+# file tabs and right-side trees return without changing tab IDs or geometry.
+[[events]]
+on = "workspace.focused"
+command = ["./bin/file-viewer", "--restore-focused-tab"]
+
+[[events]]
+on = "tab.focused"
+command = ["./bin/file-viewer", "--restore-focused-tab"]
+
 # The pane that hosts the project file tree. The command path is resolved
 # relative to the plugin root; `placement` is the default if the open request
 # doesn't override it.

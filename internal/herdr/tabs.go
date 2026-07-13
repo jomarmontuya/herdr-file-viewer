@@ -25,6 +25,7 @@ type openedPane struct {
 type fileTabState struct {
 	Version int                          `json:"version"`
 	Tabs    map[string]map[string]string `json:"tabs"`
+	Roots   map[string]string            `json:"roots,omitempty"`
 }
 
 var fileTabStateMu sync.Mutex
@@ -61,6 +62,7 @@ func OpenFileTab(workspaceID, path, projectRoot string) error {
 	var openedTabID string
 	openOrReuse := func(state *fileTabState) error {
 		if state != nil {
+			state.setRoot(workspaceID, root)
 			if tabID := state.tabID(workspaceID, abs); tabID != "" && tabIsReusable(bin, tabID, workspaceID, abs) {
 				return nil
 			}
@@ -273,6 +275,7 @@ func newFileTabState() fileTabState {
 	return fileTabState{
 		Version: 1,
 		Tabs:    make(map[string]map[string]string),
+		Roots:   make(map[string]string),
 	}
 }
 
@@ -292,6 +295,30 @@ func (s *fileTabState) set(workspaceID, path, tabID string) {
 	}
 	s.Version = 1
 	s.Tabs[workspaceID][path] = tabID
+}
+
+func (s *fileTabState) pathForTab(workspaceID, tabID string) string {
+	for path, savedTabID := range s.Tabs[workspaceID] {
+		if savedTabID == tabID {
+			return path
+		}
+	}
+	return ""
+}
+
+func (s *fileTabState) setRoot(workspaceID, root string) {
+	if s.Roots == nil {
+		s.Roots = make(map[string]string)
+	}
+	s.Version = 1
+	s.Roots[workspaceID] = root
+}
+
+func (s *fileTabState) root(workspaceID string) string {
+	if s.Roots == nil {
+		return ""
+	}
+	return s.Roots[workspaceID]
 }
 
 func withFileTabState(dir string, fn func(*fileTabState) error) error {
@@ -340,6 +367,9 @@ func loadFileTabState(path string) (fileTabState, error) {
 	}
 	if state.Version != 1 || state.Tabs == nil {
 		return fileTabState{}, errors.New("unsupported Herdr file-tab state")
+	}
+	if state.Roots == nil {
+		state.Roots = make(map[string]string)
 	}
 	return state, nil
 }

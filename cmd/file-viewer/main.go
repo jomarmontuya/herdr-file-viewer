@@ -34,6 +34,23 @@ func main() {
 		}
 		return
 	}
+	if hasArg("--restore-focused-tab") {
+		workspaceID := workspaceIDFromEvent()
+		tabID := tabIDFromEvent()
+		if tabID == "" {
+			var err error
+			tabID, err = herdrbridge.ActiveTabID(workspaceID)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "file-viewer:", err)
+				os.Exit(1)
+			}
+		}
+		if err := herdrbridge.RestoreFocusedTab(workspaceID, tabID, workspacePathFromContext()); err != nil {
+			fmt.Fprintln(os.Stderr, "file-viewer:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	ui.SetVersion(version)
 
@@ -62,7 +79,7 @@ func newModel() (tea.Model, error) {
 
 func resolveRoot() string {
 	for _, arg := range os.Args[1:] {
-		if arg != "" && arg != "--tree-only" && arg != "--workspace-created" {
+		if arg != "" && arg != "--tree-only" && arg != "--workspace-created" && arg != "--restore-focused-tab" {
 			return arg
 		}
 	}
@@ -73,6 +90,33 @@ func resolveRoot() string {
 		return p
 	}
 	return "."
+}
+
+func tabIDFromEvent() string {
+	if tabID := os.Getenv("HERDR_TAB_ID"); tabID != "" {
+		return tabID
+	}
+	var payload struct {
+		TabID string `json:"tab_id"`
+		Tab   struct {
+			TabID string `json:"tab_id"`
+		} `json:"tab"`
+		Data struct {
+			TabID string `json:"tab_id"`
+			Tab   struct {
+				TabID string `json:"tab_id"`
+			} `json:"tab"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(os.Getenv("HERDR_PLUGIN_EVENT_JSON")), &payload); err != nil {
+		return ""
+	}
+	for _, tabID := range []string{payload.TabID, payload.Tab.TabID, payload.Data.TabID, payload.Data.Tab.TabID} {
+		if tabID != "" {
+			return tabID
+		}
+	}
+	return ""
 }
 
 func workspaceIDFromEvent() string {

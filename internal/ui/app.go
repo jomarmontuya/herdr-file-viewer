@@ -74,12 +74,13 @@ const explorerWidth = 34
 
 // Model is the root application state.
 type Model struct {
-	root     string
-	width    int
-	height   int
-	ready    bool
-	treeOnly bool
-	st       styles
+	root          string
+	width         int
+	height        int
+	ready         bool
+	treeOnly      bool
+	treeStatePath string
+	st            styles
 
 	mode   mode
 	bfocus browseFocus
@@ -196,18 +197,21 @@ func newModel(root string, treeOnly bool) (Model, error) {
 	if err != nil {
 		return Model{}, err
 	}
-	return Model{
-		root:        abs,
-		treeOnly:    treeOnly,
-		st:          newStyles(),
-		tree:        tree,
-		viewer:      viewer.New(),
-		finder:      newFinderPanel(),
-		search:      newSearchPanel(),
-		diff:        newDiffPanel(),
-		log:         newLogPanel(),
-		promptInput: newPromptInput(),
-	}, nil
+	model := Model{
+		root:          abs,
+		treeOnly:      treeOnly,
+		treeStatePath: treeStatePathFromEnv(),
+		st:            newStyles(),
+		tree:          tree,
+		viewer:        viewer.New(),
+		finder:        newFinderPanel(),
+		search:        newSearchPanel(),
+		diff:          newDiffPanel(),
+		log:           newLogPanel(),
+		promptInput:   newPromptInput(),
+	}
+	model.restoreTreeState()
+	return model, nil
 }
 
 // Init starts only tree refresh and best-effort sidebar sizing in tree-only
@@ -506,12 +510,15 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.bfocus = focusExplorer
 	n := m.tree.Selected()
 	if n == nil {
+		m.persistTreeState()
 		return m, nil
 	}
 	if n.IsDir {
 		m.tree.Toggle()
+		m.persistTreeState()
 		return m, nil
 	}
+	m.persistTreeState()
 	return m, m.openSelectedFileTab()
 }
 
@@ -546,6 +553,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
+		m.persistTreeState()
 		return m, tea.Quit
 	case "r":
 		m.tree.Refresh()
@@ -562,10 +570,12 @@ func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if n.IsDir {
 				m.tree.Toggle()
 			} else {
+				m.persistTreeState()
 				return m, m.openSelectedFileTab()
 			}
 		}
 	}
+	m.persistTreeState()
 	return m, nil
 }
 
