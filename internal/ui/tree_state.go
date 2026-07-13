@@ -25,6 +25,10 @@ func treeStatePathFromEnv() string {
 	if dir == "" || workspaceID == "" || tabID == "" {
 		return ""
 	}
+	return treeStatePath(dir, workspaceID, tabID)
+}
+
+func treeStatePath(dir, workspaceID, tabID string) string {
 	sum := sha256.Sum256([]byte(workspaceID + "\x00" + tabID))
 	return filepath.Join(dir, "tree-state-"+hex.EncodeToString(sum[:])+".json")
 }
@@ -33,15 +37,31 @@ func (m *Model) restoreTreeState() {
 	if m.treeStatePath == "" {
 		return
 	}
-	raw, err := os.ReadFile(m.treeStatePath)
-	if err != nil {
+	if m.restoreTreeStateFrom(m.treeStatePath) {
 		return
+	}
+	dir := os.Getenv("HERDR_PLUGIN_STATE_DIR")
+	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
+	sourceTabID := os.Getenv("HERDR_TREE_STATE_SOURCE_TAB_ID")
+	if dir == "" || workspaceID == "" || sourceTabID == "" || sourceTabID == os.Getenv("HERDR_TAB_ID") {
+		return
+	}
+	if m.restoreTreeStateFrom(treeStatePath(dir, workspaceID, sourceTabID)) {
+		m.persistTreeState()
+	}
+}
+
+func (m *Model) restoreTreeStateFrom(path string) bool {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
 	}
 	var saved persistedTreeState
 	if json.Unmarshal(raw, &saved) != nil || saved.Version != 1 || filepath.Clean(saved.Root) != m.root {
-		return
+		return false
 	}
 	m.tree.Restore(explorer.State{Expanded: saved.Expanded, Selected: saved.Selected})
+	return true
 }
 
 func (m *Model) persistTreeState() {

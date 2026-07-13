@@ -99,7 +99,7 @@ func openNewFileTab(bin, workspaceID, path, projectRoot string, state *fileTabSt
 	if opened.PaneID == "" {
 		return opened.TabID, errors.New("Herdr pane response did not include a pane ID")
 	}
-	if out, err = exec.Command(bin, openTreeArgs(opened.PaneID, projectRoot)...).CombinedOutput(); err != nil {
+	if out, err = exec.Command(bin, openTreeArgsForFileTab(opened.PaneID, projectRoot, os.Getenv("HERDR_TAB_ID"))...).CombinedOutput(); err != nil {
 		return opened.TabID, fmt.Errorf("attach Herdr file tree: %w: %s", err, out)
 	}
 	if state != nil {
@@ -142,14 +142,18 @@ func openFileTabArgs(workspaceID, path string) []string {
 }
 
 func openTreeArgs(targetPaneID, projectRoot string) []string {
-	return treeOpenArgs(targetPaneID, projectRoot, "")
+	return treeOpenArgs(targetPaneID, projectRoot, "", "")
+}
+
+func openTreeArgsForFileTab(targetPaneID, projectRoot, sourceTabID string) []string {
+	return treeOpenArgs(targetPaneID, projectRoot, "", sourceTabID)
 }
 
 func openFollowingTreeArgs(targetPaneID, projectRoot string) []string {
-	return treeOpenArgs(targetPaneID, projectRoot, targetPaneID)
+	return treeOpenArgs(targetPaneID, projectRoot, targetPaneID, "")
 }
 
-func treeOpenArgs(targetPaneID, projectRoot, followPaneID string) []string {
+func treeOpenArgs(targetPaneID, projectRoot, followPaneID, sourceTabID string) []string {
 	args := []string{
 		"plugin", "pane", "open",
 		"--plugin", pluginID,
@@ -160,6 +164,9 @@ func treeOpenArgs(targetPaneID, projectRoot, followPaneID string) []string {
 	}
 	if followPaneID != "" {
 		args = append(args, "--env", "HERDR_TREE_FOLLOW_PANE_ID="+followPaneID)
+	}
+	if sourceTabID != "" {
+		args = append(args, "--env", "HERDR_TREE_STATE_SOURCE_TAB_ID="+sourceTabID)
 	}
 	return append(args,
 		"--direction", "right",
