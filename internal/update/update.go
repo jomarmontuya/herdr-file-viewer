@@ -13,7 +13,7 @@ import (
 )
 
 // Repo is the GitHub owner/repo the releases live in.
-const Repo = "ismaelosuna7824/herdr-file-viewer"
+const Repo = "jomarmontuya/herdr-file-viewer"
 
 // Latest returns the tag name of the newest GitHub release (e.g. "v0.1.4").
 func Latest(ctx context.Context) (string, error) {

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitstatus"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitstatus"
 )
 
 type stageState int

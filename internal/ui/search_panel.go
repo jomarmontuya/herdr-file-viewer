@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/search"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/search"
 )
 
 // searchPanel is the content search overlay (Ctrl+F). It owns the query input

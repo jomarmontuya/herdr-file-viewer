@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitlog"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitstatus"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitlog"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitstatus"
 )
 
 type logKind int

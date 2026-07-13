@@ -18,9 +18,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/filetab"
-	herdrbridge "github.com/ismaelosuna7824/herdr-file-viewer/internal/herdr"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/ui"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/filetab"
+	herdrbridge "github.com/jomarmontuya/herdr-file-viewer/internal/herdr"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/ui"
 )
 
 // version is injected at build time via -ldflags "-X main.version=vX.Y.Z".

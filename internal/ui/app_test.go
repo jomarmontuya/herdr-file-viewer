@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitdiff"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitstatus"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitstatus"
 )
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)

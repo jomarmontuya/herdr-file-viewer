@@ -3,7 +3,7 @@ package ui
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitstatus"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitstatus"
 )
 
 // Palette. A small, calm set of colors that reads well on dark terminals and

@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/explorer"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/explorer"
 )
 
 type persistedTreeState struct {

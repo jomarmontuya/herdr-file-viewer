@@ -22,16 +22,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/editor"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/explorer"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitdiff"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitlog"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitstatus"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/herdr"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/reveal"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/search"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/update"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/viewer"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/editor"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/explorer"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitlog"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitstatus"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/herdr"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/reveal"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/search"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/update"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/viewer"
 )
 
 // version is the running build's version, injected via -ldflags and set from

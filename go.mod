@@ -1,4 +1,4 @@
-module github.com/ismaelosuna7824/herdr-file-viewer
+module github.com/jomarmontuya/herdr-file-viewer
 
 go 1.25.1
 

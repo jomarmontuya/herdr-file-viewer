@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/finder"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/finder"
 )
 
 const finderLimit = 200

@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/filetab"
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/ui"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/filetab"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/ui"
 )
 
 type mouseOptionProbe struct{}

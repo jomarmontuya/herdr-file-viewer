@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitdiff"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 )
 
 func TestPairRowsAlignsChanges(t *testing.T) {

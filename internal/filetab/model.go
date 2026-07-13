@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/viewer"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/viewer"
 )
 
 // Model is a full-pane wrapper around the shared read-only viewer.

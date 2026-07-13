@@ -2,6 +2,12 @@ package update
 
 import "testing"
 
+func TestRepoPointsAtPublicFork(t *testing.T) {
+	if Repo != "jomarmontuya/herdr-file-viewer" {
+		t.Fatalf("Repo = %q", Repo)
+	}
+}
+
 func TestIsNewer(t *testing.T) {
 	cases := []struct {
 		latest, current string

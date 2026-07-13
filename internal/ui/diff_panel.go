@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/ismaelosuna7824/herdr-file-viewer/internal/gitdiff"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 )
 
 // diffPanel is the "review" view: a scrollable, syntax-neutral rendering of a
