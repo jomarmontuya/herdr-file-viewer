@@ -82,6 +82,8 @@ More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
   CLI pane and a narrow file tree on the right.
 - **Clickable folders and files** — click a folder to expand/collapse it; click a
   file to open it as a Herdr file tab.
+- **Mouse-wheel tree scrolling** — scroll long expanded file trees and Source
+  Control lists without moving the keyboard selection.
 - **Same-file tab reuse** — clicking the same absolute file path focuses its
   existing tab instead of creating duplicates.
 - **Per-tab right-side trees** — each file tab gets a tree on the right. When a
@@ -104,8 +106,8 @@ More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
 - **Editable file tabs** — file tabs stay read-only by default for Herdr's native
   mouse drag selection, then switch into an in-pane editor with conventional
   keyboard selection, word movement, clipboard, save and cancel shortcuts.
-- **Clickable URLs** — `http://` and `https://` URLs render as terminal
-  hyperlinks, so modified-click opens them in the terminal/browser flow.
+- **Clickable URLs** — visible `http://` and `https://` URLs use Herdr's native
+  modified-click detection, with one browser tab opened per click.
 - **Markdown source/render toggle** — `.md` tabs can toggle between rendered
   markdown and raw source with `m`.
 
@@ -142,6 +144,7 @@ unstage, commit, or otherwise mutate Git state.
 | Click `[G]` / `g` | Open Source Control |
 | `Tab` | Toggle Files / Source Control |
 | `↑` / `↓`, `j` / `k` | Move through changed files |
+| Mouse wheel | Scroll the list without moving the selected file |
 | Click file / `Enter` | Open or focus its staged/worktree diff tab |
 | `r` | Refresh tree and Git state |
 

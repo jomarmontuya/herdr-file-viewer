@@ -1,6 +1,6 @@
 id = "medianeth.file-viewer"
 name = "File Tree"
-version = "0.7.0"
+version = "0.7.1"
 min_herdr_version = "0.7.0"
 description = "Clickable project file tree that opens files in Herdr workspace tabs."
 platforms = ["linux", "macos"]
