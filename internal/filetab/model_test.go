@@ -169,3 +169,25 @@ func TestFileTabEditModeEscapeCancelsWithoutWriting(t *testing.T) {
 		t.Fatalf("cancel should show a status hint:\n%s", tab.View())
 	}
 }
+
+func TestFileTabEditModeRejectsUneditableFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "image.bin")
+	if err := os.WriteFile(path, []byte{'h', 'i', 0, 'x'}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 10})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+
+	tab := model.(Model)
+	if tab.editing {
+		t.Fatal("binary/unpreviewable files should stay in viewer mode")
+	}
+	if !strings.Contains(tab.View(), "not editable") {
+		t.Fatalf("uneditable file should explain why edit mode did not open:\n%s", tab.View())
+	}
+}
