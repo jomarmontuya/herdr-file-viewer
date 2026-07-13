@@ -91,3 +91,81 @@ func TestFileTabRejectsMissingPath(t *testing.T) {
 		t.Fatal("file tab should reject a missing path")
 	}
 }
+
+func TestFileTabEditModeSavesBackToDisk(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(path, []byte("old\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 10})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+
+	tab := model.(Model)
+	if !tab.editing {
+		t.Fatal("pressing e should enter edit mode")
+	}
+	if !strings.Contains(tab.View(), "ctrl+s save") {
+		t.Fatalf("edit mode should show save controls:\n%s", tab.View())
+	}
+
+	tab.edit.SetValue("new\ncontent\n")
+	model, _ = tab.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	tab = model.(Model)
+	if tab.editing {
+		t.Fatal("ctrl+s should leave edit mode after saving")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new\ncontent\n" {
+		t.Fatalf("save wrote %q, want updated file content", got)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Fatalf("save should preserve file permissions, got %v", info.Mode().Perm())
+	}
+	if !strings.Contains(tab.View(), "new") || !strings.Contains(tab.View(), "saved") {
+		t.Fatalf("saved tab should return to viewer with status:\n%s", tab.View())
+	}
+}
+
+func TestFileTabEditModeEscapeCancelsWithoutWriting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "note.txt")
+	if err := os.WriteFile(path, []byte("keep\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 10})
+	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	tab := model.(Model)
+	tab.edit.SetValue("discard\n")
+
+	model, _ = tab.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	tab = model.(Model)
+	if tab.editing {
+		t.Fatal("esc should leave edit mode")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "keep\n" {
+		t.Fatalf("cancel should not write to disk, got %q", got)
+	}
+	if !strings.Contains(tab.View(), "edit cancelled") {
+		t.Fatalf("cancel should show a status hint:\n%s", tab.View())
+	}
+}
