@@ -92,3 +92,23 @@ TestRestoreFocusedTabPrefersSavedRootTreeOverNestedEventContext changed from a f
 When testing path scoping, assert full argument boundaries or decoded argv values, never a bare path prefix
 
 ---
+## [AIL-20260713-174916-correction] Default tree captured launch root and ignored source shell cd
+
+**Logged**: 2026-07-13T17:49:16+08:00
+**Kind**: correction
+**Priority**: medium
+**Status**: pending
+**Area**: unknown
+
+
+### Mistake Or Rejected Approach
+workspace.created attached a tree with one-time HERDR_TREE_ROOT only; r refreshed contents without re-reading CLI pane cwd
+
+### Correction
+Pass source CLI pane ID only to default trees; poll Herdr foreground_cwd and re-root; keep file-tab trees pinned
+
+
+### Future Avoid Rule
+For default Herdr trees, bind to an explicit source CLI pane and verify live cd; never infer follow mode from missing file path or use a file pane as cwd source.
+
+---

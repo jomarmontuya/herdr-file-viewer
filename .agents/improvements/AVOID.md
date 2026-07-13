@@ -6,3 +6,4 @@ Short imperative rules for future agents.
 - **AIL-20260713-073219-failure**: For this repository, inspect the exact current lines before every apply_patch after prior edits; do not reuse remembered multi-file context across TDD iterations.
 - **AIL-20260713-171539-failure**: Never claim automatic Herdr restart restoration from focus-hook unit tests; full-stop and restart a named session and verify process-info plus plugin logs before acceptance
 - **AIL-20260713-171539-test-trip**: When testing path scoping, assert full argument boundaries or decoded argv values, never a bare path prefix
+- **AIL-20260713-174916-correction**: For default Herdr trees, bind to an explicit source CLI pane and verify live cd; never infer follow mode from missing file path or use a file pane as cwd source.
