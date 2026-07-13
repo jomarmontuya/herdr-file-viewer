@@ -52,10 +52,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	options := []tea.ProgramOption{tea.WithAltScreen()}
+	if shouldCaptureMouse(model) {
+		options = append(options, tea.WithMouseCellMotion())
+	}
+	p := tea.NewProgram(model, options...)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "file-viewer:", err)
 		os.Exit(1)
+	}
+}
+
+// shouldCaptureMouse leaves standalone file tabs in normal terminal mouse mode
+// so Herdr core can highlight dragged text and copy it on release. Explorer and
+// full-viewer panes still need Bubble Tea mouse events for clickable tree rows.
+func shouldCaptureMouse(model tea.Model) bool {
+	switch model.(type) {
+	case filetab.Model, *filetab.Model:
+		return false
+	default:
+		return true
 	}
 }
 
