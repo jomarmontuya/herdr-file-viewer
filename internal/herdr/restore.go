@@ -22,15 +22,17 @@ func RestoreFocusedTab(workspaceID, tabID, projectRoot string) error {
 		return errors.New("Herdr tab ID is unavailable")
 	}
 
-	stateDir := os.Getenv("HERDR_PLUGIN_STATE_DIR")
-	restore := func(state *fileTabState) error {
-		return restoreFocusedTab(herdrBin(), workspaceID, tabID, projectRoot, state)
-	}
-	if stateDir == "" {
-		state := newFileTabState()
-		return restore(&state)
-	}
-	return withFileTabState(stateDir, restore)
+	return withWorkspaceTreeLock(func() error {
+		stateDir := os.Getenv("HERDR_PLUGIN_STATE_DIR")
+		restore := func(state *fileTabState) error {
+			return restoreFocusedTab(herdrBin(), workspaceID, tabID, projectRoot, state)
+		}
+		if stateDir == "" {
+			state := newFileTabState()
+			return restore(&state)
+		}
+		return withFileTabState(stateDir, restore)
+	})
 }
 
 func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileTabState) error {

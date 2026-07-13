@@ -25,6 +25,12 @@ func EnsureWorkspaceTree(workspaceID string) error {
 	if workspaceID == "" {
 		return errors.New("Herdr workspace ID is unavailable")
 	}
+	return withWorkspaceTreeLock(func() error {
+		return ensureWorkspaceTree(workspaceID)
+	})
+}
+
+func withWorkspaceTreeLock(fn func() error) error {
 	workspaceTreeMu.Lock()
 	defer workspaceTreeMu.Unlock()
 
@@ -42,7 +48,10 @@ func EnsureWorkspaceTree(workspaceID string) error {
 		}
 		defer unlockFile(lock) //nolint:errcheck
 	}
+	return fn()
+}
 
+func ensureWorkspaceTree(workspaceID string) error {
 	bin := os.Getenv("HERDR_BIN_PATH")
 	if bin == "" {
 		bin = "herdr"
