@@ -1,6 +1,6 @@
 id = "medianeth.file-viewer"
 name = "File Tree"
-version = "0.5.1"
+version = "0.6.0"
 min_herdr_version = "0.7.0"
 description = "Clickable project file tree that opens files in Herdr workspace tabs."
 platforms = ["linux", "macos"]
@@ -19,10 +19,6 @@ command = ["./bin/file-viewer", "--workspace-created"]
 # Herdr persists tab/pane geometry across a full server restart, then restores
 # each pane as a fresh shell. Rehydrate the focused saved layout in-place so
 # file tabs and right-side trees return without changing tab IDs or geometry.
-[[events]]
-on = "workspace.focused"
-command = ["./bin/file-viewer", "--restore-focused-tab"]
-
 [[events]]
 on = "tab.focused"
 command = ["./bin/file-viewer", "--restore-focused-tab"]

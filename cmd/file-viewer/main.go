@@ -37,14 +37,6 @@ func main() {
 	if hasArg("--restore-focused-tab") {
 		workspaceID := workspaceIDFromEvent()
 		tabID := tabIDFromEvent()
-		if tabID == "" {
-			var err error
-			tabID, err = herdrbridge.ActiveTabID(workspaceID)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "file-viewer:", err)
-				os.Exit(1)
-			}
-		}
 		if err := herdrbridge.RestoreFocusedTab(workspaceID, tabID, workspacePathFromContext()); err != nil {
 			fmt.Fprintln(os.Stderr, "file-viewer:", err)
 			os.Exit(1)

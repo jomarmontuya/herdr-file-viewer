@@ -10,34 +10,6 @@ import (
 	"strings"
 )
 
-// ActiveTabID resolves the tab Herdr currently considers active in a workspace.
-// workspace.focused events do not carry a tab ID, so their restore hook uses
-// this query before rehydrating the saved pane layout.
-func ActiveTabID(workspaceID string) (string, error) {
-	if workspaceID == "" {
-		return "", errors.New("Herdr workspace ID is unavailable")
-	}
-	bin := herdrBin()
-	out, err := exec.Command(bin, "workspace", "get", workspaceID).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("get focused Herdr workspace: %w: %s", err, out)
-	}
-	var response struct {
-		Result struct {
-			Workspace struct {
-				ActiveTabID string `json:"active_tab_id"`
-			} `json:"workspace"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(out, &response); err != nil {
-		return "", fmt.Errorf("decode focused Herdr workspace: %w", err)
-	}
-	if response.Result.Workspace.ActiveTabID == "" {
-		return "", errors.New("focused Herdr workspace did not include an active tab ID")
-	}
-	return response.Result.Workspace.ActiveTabID, nil
-}
-
 // RestoreFocusedTab rehydrates plugin commands inside Herdr's persisted pane
 // layout. A full Herdr server restart keeps tabs, panes, cwd, labels, layout and
 // focus, but intentionally restores each pane as a fresh shell. Reusing those
@@ -83,10 +55,13 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 
 	root := validRoot(state.root(workspaceID))
 	if root == "" {
+		root = rootFromExistingTreePanes(panes)
+	}
+	if root == "" {
 		root = validRoot(projectRoot)
 	}
 	if root == "" {
-		root = rootFromRestoredPanes(panes, tabPanes)
+		root = rootFromPanes(tabPanes)
 	}
 	if root == "" {
 		return errors.New("project root is unavailable during Herdr tab restore")
@@ -164,15 +139,19 @@ func validRoot(path string) string {
 	return abs
 }
 
-func rootFromRestoredPanes(allPanes, tabPanes []paneContext) string {
-	for _, pane := range allPanes {
+func rootFromExistingTreePanes(panes []paneContext) string {
+	for _, pane := range panes {
 		if pane.Label == "File Tree" {
 			if root := validRoot(pane.Cwd); root != "" {
 				return root
 			}
 		}
 	}
-	for _, pane := range tabPanes {
+	return ""
+}
+
+func rootFromPanes(panes []paneContext) string {
+	for _, pane := range panes {
 		if root := validRoot(pane.Cwd); root != "" {
 			return root
 		}

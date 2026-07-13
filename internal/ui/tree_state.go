@@ -69,9 +69,6 @@ func (m *Model) persistTreeState() {
 	if err := tmp.Chmod(0o600); err == nil {
 		err = json.NewEncoder(tmp).Encode(saved)
 	}
-	if err == nil {
-		err = tmp.Sync()
-	}
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}

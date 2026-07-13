@@ -240,7 +240,9 @@ in-app keybinding reference.
 Herdr plugin panes belong to one tab, so each file tab opened by this plugin
 gets its own narrow tree split on the right. Clicking the same absolute path in
 the same workspace focuses its existing tab; closed-tab records are detected
-and replaced automatically.
+and replaced automatically. After a full Herdr restart, focusing a restored tab
+rehydrates its saved file and tree inside the existing panes. Each tab also
+remembers its expanded folders and selected tree row.
 
 ## Editing files
 

@@ -86,17 +86,14 @@ func TestManifestRegistersWorkspaceCreatedHook(t *testing.T) {
 	}
 }
 
-func TestManifestRegistersFocusedWorkspaceAndTabRestoreHooks(t *testing.T) {
+func TestManifestRegistersFocusedTabRestoreHook(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "herdr-plugin.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	manifest := string(raw)
-	for _, event := range []string{"workspace.focused", "tab.focused"} {
-		want := `on = "` + event + `"`
-		if !strings.Contains(manifest, want) {
-			t.Fatalf("manifest must restore plugin panes on %s:\n%s", event, manifest)
-		}
+	if !strings.Contains(manifest, `on = "tab.focused"`) {
+		t.Fatalf("manifest must restore plugin panes when a tab becomes focused:\n%s", manifest)
 	}
 	if !strings.Contains(manifest, `command = ["./bin/file-viewer", "--restore-focused-tab"]`) {
 		t.Fatalf("restore hooks must invoke the focused-tab restorer:\n%s", manifest)
