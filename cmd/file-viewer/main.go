@@ -52,15 +52,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	options := []tea.ProgramOption{tea.WithAltScreen()}
-	if shouldCaptureMouse(model) {
-		options = append(options, tea.WithMouseCellMotion())
-	}
-	p := tea.NewProgram(model, options...)
+	p := tea.NewProgram(model, programOptions(model)...)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "file-viewer:", err)
 		os.Exit(1)
 	}
+}
+
+func programOptions(model tea.Model) []tea.ProgramOption {
+	options := []tea.ProgramOption{tea.WithAltScreen()}
+	if shouldCaptureMouse(model) {
+		options = append(options, tea.WithMouseCellMotion())
+	}
+	return options
 }
 
 // shouldCaptureMouse leaves standalone file tabs in normal terminal mouse mode

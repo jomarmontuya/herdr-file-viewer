@@ -1,15 +1,29 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/filetab"
 	"github.com/ismaelosuna7824/herdr-file-viewer/internal/ui"
 )
+
+type mouseOptionProbe struct{}
+
+func (mouseOptionProbe) Init() tea.Cmd { return nil }
+func (mouseOptionProbe) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(tea.KeyMsg); ok {
+		return mouseOptionProbe{}, tea.Quit
+	}
+	return mouseOptionProbe{}, nil
+}
+func (mouseOptionProbe) View() string { return "probe" }
 
 func TestFileTabsLeaveMouseSelectionToHerdr(t *testing.T) {
 	if shouldCaptureMouse(filetab.Model{}) {
@@ -20,6 +34,35 @@ func TestFileTabsLeaveMouseSelectionToHerdr(t *testing.T) {
 func TestInteractiveTreePanesKeepMouseCapture(t *testing.T) {
 	if !shouldCaptureMouse(ui.Model{}) {
 		t.Fatal("tree/browser panes still need Bubble Tea mouse events for clicking files and folders")
+	}
+}
+
+func TestProgramOptionsOnlyEmitMouseTrackingForInteractiveTreePanes(t *testing.T) {
+	const enableCellMotion = "\x1b[?1002h"
+
+	for _, tc := range []struct {
+		name      string
+		model     tea.Model
+		wantMouse bool
+	}{
+		{name: "file tab", model: filetab.Model{}, wantMouse: false},
+		{name: "tree pane", model: ui.Model{}, wantMouse: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var output bytes.Buffer
+			options := append(programOptions(tc.model),
+				tea.WithInput(bytes.NewBufferString("q")),
+				tea.WithOutput(&output),
+				tea.WithoutSignalHandler(),
+			)
+			if _, err := tea.NewProgram(mouseOptionProbe{}, options...).Run(); err != nil {
+				t.Fatal(err)
+			}
+			gotMouse := strings.Contains(output.String(), enableCellMotion)
+			if gotMouse != tc.wantMouse {
+				t.Fatalf("mouse tracking emitted = %v, want %v; output %q", gotMouse, tc.wantMouse, output.String())
+			}
+		})
 	}
 }
 
