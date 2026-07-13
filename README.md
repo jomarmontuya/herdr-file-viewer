@@ -9,7 +9,8 @@ A lightweight, mouse-enabled **project file tree** for
 [Herdr](https://herdr.dev), written in Go with
 [Bubble Tea](https://github.com/charmbracelet/bubbletea). The default plugin
 pane is a narrow right sidebar: folders expand in place and files open as real
-Herdr tabs. Preview, search, and git panels are not started in this mode.
+Herdr tabs. A slim activity rail switches between Files and a read-only Source
+Control list without turning the sidebar into a full IDE.
 
 This fork builds on
 [ismaelosuna7824/herdr-file-viewer](https://github.com/ismaelosuna7824/herdr-file-viewer)
@@ -58,9 +59,10 @@ own right-side tree.
 CLI / Codex pane                                      File Tree
 ───────────────────────────────────────────────       ───────────────────────
 ~/project git:(main)                                  File Tree — project
-                                                       ▾ project/
+                                                       ▾ project/        │[F]
                                                          ▸ .github/
-                                                         ▸ cmd/
+                                                         ▸ cmd/          │[G]
+                                                                           2
                                                          ▾ internal/
                                                            ▸ herdr/
                                                            ▸ ui/
@@ -93,6 +95,12 @@ More plain-text snapshots live in [`docs/screenshots/`](docs/screenshots).
   file's parent folder.
 - **Git decorations** — modified, untracked, staged, deleted, renamed and
   conflicted files get editor-style badges. Dirty directories are tinted.
+- **Source Control activity** — click `[G]` (or press `g`) to list staged and
+  working-tree changes separately. The badge counts unique changed files.
+- **Dedicated diff tabs** — click a changed file or press `Enter` to open its
+  staged or working-tree diff as a Herdr tab with the project tree still fixed
+  on the right. Partially staged files appear in both groups, and reopening the
+  same review focuses its existing tab.
 - **Editable file tabs** — file tabs stay read-only by default for Herdr's native
   mouse drag selection, then switch into an in-pane editor with conventional
   keyboard selection, word movement, clipboard, save and cancel shortcuts.
@@ -106,19 +114,39 @@ still works without badges.
 
 ## Layout
 
-The default Herdr layout is intentionally small:
+The default Herdr layout is intentionally small. `[F]` selects Files and `[G]`
+selects Source Control:
 
 ```
 ┌──────────────────────────────────────────────┬──────────────────────┐
 │ Herdr terminal / Codex / Claude / shell      │ File Tree            │
-│                                              │ ▾ project/           │
-│                                              │   ▸ internal/        │
-│                                              │   README.md          │
+│                                              │ ▾ project/       │[F]│
+│                                              │   ▸ internal/    │   │
+│                                              │   README.md      │[G]│
 └──────────────────────────────────────────────┴──────────────────────┘
 ```
 
 The upstream-style four-panel viewer remains available if you run the binary
 without `--tree-only`, but it is not the default installed plugin pane.
+
+### Source Control activity
+
+The right-edge `[G]` button opens a read-only change list with two expanded
+groups: **Staged Changes** and **Changes**. A partially staged file appears in
+both because each row opens a different diff boundary. This view does not stage,
+unstage, commit, or otherwise mutate Git state.
+
+| Key / mouse | Action |
+|-------------|--------|
+| Click `[F]` / `f` | Return to the file tree |
+| Click `[G]` / `g` | Open Source Control |
+| `Tab` | Toggle Files / Source Control |
+| `↑` / `↓`, `j` / `k` | Move through changed files |
+| Click file / `Enter` | Open or focus its staged/worktree diff tab |
+| `r` | Refresh tree and Git state |
+
+Inside a diff tab, use `↑`/`↓` or page keys to scroll, `s` to toggle
+inline/split layout, `r` to reload, and `q`/`Esc` to close the pane process.
 
 ### Legacy full viewer
 

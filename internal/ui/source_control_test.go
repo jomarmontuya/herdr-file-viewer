@@ -194,3 +194,103 @@ func TestDiffTabRendersOnlyRequestedSideOfPartialChange(t *testing.T) {
 		t.Fatalf("staged diff tab leaked worktree content:\n%s", view)
 	}
 }
+
+func TestSourceControlSelectionMovesAndSurvivesRefresh(t *testing.T) {
+	m, err := NewTree(fixtureRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := []gitstatus.Change{
+		{Path: "a.ts", Index: 'M', Work: 'M'},
+		{Path: "b.ts", Index: 'A', Work: ' '},
+	}
+	m.setSourceControlChanges(changes)
+	first, ok := m.selectedSourceControlLine()
+	if !ok || first.change.Path != "a.ts" || first.mode != gitdiff.ModeStaged {
+		t.Fatalf("unexpected initial selection: %+v, ok=%v", first, ok)
+	}
+	m.moveSourceControl(1)
+	second, ok := m.selectedSourceControlLine()
+	if !ok || second.change.Path != "b.ts" {
+		t.Fatalf("down should skip headings and select b.ts: %+v", second)
+	}
+	m.setSourceControlChanges(changes)
+	preserved, ok := m.selectedSourceControlLine()
+	if !ok || sourceControlKey(preserved) != sourceControlKey(second) {
+		t.Fatalf("refresh should preserve the selected review: %+v", preserved)
+	}
+	m.moveSourceControl(-1)
+	back, _ := m.selectedSourceControlLine()
+	if back.change.Path != "a.ts" {
+		t.Fatalf("up should return to a.ts, got %+v", back)
+	}
+}
+
+func TestSourceControlStatusLettersAndColors(t *testing.T) {
+	for letter, want := range map[string]gitstatus.Code{
+		"U": gitstatus.Untracked,
+		"A": gitstatus.Added,
+		"D": gitstatus.Deleted,
+		"R": gitstatus.Renamed,
+		"!": gitstatus.Conflicted,
+		"M": gitstatus.Modified,
+	} {
+		if got := sourceControlCode(letter); got != want {
+			t.Errorf("sourceControlCode(%q) = %v, want %v", letter, got, want)
+		}
+	}
+	if got := sourceControlLetter(sourceControlLine{
+		change: gitstatus.Change{Index: '?', Work: '?'}, mode: gitdiff.ModeUntracked,
+	}); got != "U" {
+		t.Fatalf("untracked letter = %q, want U", got)
+	}
+	if got := sourceControlLetter(sourceControlLine{
+		change: gitstatus.Change{Index: 'A', Work: ' '}, mode: gitdiff.ModeStaged,
+	}); got != "A" {
+		t.Fatalf("staged letter = %q, want A", got)
+	}
+}
+
+func TestDiffTabValidationLabelsAndControls(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "removed.txt") // deleted files need not exist
+
+	if _, err := NewDiffTab(root, path, gitdiff.Mode("bad")); err == nil {
+		t.Fatal("invalid diff mode should be rejected")
+	}
+	if _, err := NewDiffTab(root, filepath.Join(filepath.Dir(root), "outside.txt"), gitdiff.ModeStaged); err == nil {
+		t.Fatal("path outside the project should be rejected")
+	}
+	notDir := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(notDir, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewDiffTab(notDir, path, gitdiff.ModeStaged); err == nil {
+		t.Fatal("non-directory root should be rejected")
+	}
+
+	m, err := NewDiffTab(root, path, gitdiff.ModeUntracked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.reviewLabel(); got != "Untracked · removed.txt" {
+		t.Fatalf("review label = %q", got)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(DiffTabModel)
+	if view := ansiRe.ReplaceAllString(m.View(), ""); !strings.Contains(view, "split/inline") {
+		t.Fatalf("diff tab footer missing controls:\n%s", view)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = updated.(DiffTabModel)
+	updated, refresh := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = updated.(DiffTabModel)
+	if refresh == nil {
+		t.Fatal("r should reload the diff")
+	}
+	updated, quit := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	_ = updated
+	if quit == nil {
+		t.Fatal("q should close the diff pane")
+	}
+}

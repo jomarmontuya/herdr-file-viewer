@@ -8,7 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
+
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 )
 
 const (
@@ -25,6 +28,7 @@ type openedPane struct {
 type fileTabState struct {
 	Version int                          `json:"version"`
 	Tabs    map[string]map[string]string `json:"tabs"`
+	Diffs   map[string]map[string]string `json:"diffs,omitempty"`
 	Roots   map[string]string            `json:"roots,omitempty"`
 }
 
@@ -84,6 +88,56 @@ func OpenFileTab(workspaceID, path, projectRoot string) error {
 	return err
 }
 
+// OpenDiffTab focuses the existing review for the same path and Git boundary,
+// or opens a new diff tab with a project-root tree attached on the right.
+func OpenDiffTab(workspaceID, path, projectRoot string, mode gitdiff.Mode) error {
+	if workspaceID == "" {
+		return errors.New("Herdr workspace ID is unavailable")
+	}
+	if path == "" {
+		return errors.New("diff path is empty")
+	}
+	if projectRoot == "" {
+		return errors.New("project root is empty")
+	}
+	if !mode.Valid() || mode == gitdiff.ModeHead {
+		return fmt.Errorf("unsupported Source Control diff mode: %q", mode)
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return err
+	}
+
+	bin := herdrBin()
+	stateDir := os.Getenv("HERDR_PLUGIN_STATE_DIR")
+	var openedTabID string
+	openOrReuse := func(state *fileTabState) error {
+		if state != nil {
+			state.setRoot(workspaceID, root)
+			if tabID := state.diffTabID(workspaceID, abs, mode); tabID != "" &&
+				diffTabIsReusable(bin, tabID, workspaceID, abs, mode) {
+				return nil
+			}
+		}
+		var openErr error
+		openedTabID, openErr = openNewDiffTab(bin, workspaceID, abs, root, mode, state)
+		return openErr
+	}
+	if stateDir == "" {
+		err = openOrReuse(nil)
+	} else {
+		err = withFileTabState(stateDir, openOrReuse)
+	}
+	if err != nil && openedTabID != "" {
+		closeTabBestEffort(bin, openedTabID)
+	}
+	return err
+}
+
 func openNewFileTab(bin, workspaceID, path, projectRoot string, state *fileTabState) (string, error) {
 	out, err := exec.Command(bin, openFileTabArgs(workspaceID, path)...).CombinedOutput()
 	if err != nil {
@@ -108,6 +162,30 @@ func openNewFileTab(bin, workspaceID, path, projectRoot string, state *fileTabSt
 	return opened.TabID, nil
 }
 
+func openNewDiffTab(bin, workspaceID, path, projectRoot string, mode gitdiff.Mode, state *fileTabState) (string, error) {
+	out, err := exec.Command(bin, openDiffTabArgs(workspaceID, path, projectRoot, mode)...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("open Herdr diff tab: %w: %s", err, out)
+	}
+	opened, err := parseOpenedPane(out)
+	if err != nil {
+		return "", err
+	}
+	if out, err = exec.Command(bin, "tab", "rename", opened.TabID, diffTabLabel(path, mode)).CombinedOutput(); err != nil {
+		return opened.TabID, fmt.Errorf("rename Herdr diff tab: %w: %s", err, out)
+	}
+	if opened.PaneID == "" {
+		return opened.TabID, errors.New("Herdr pane response did not include a pane ID")
+	}
+	if out, err = exec.Command(bin, openTreeArgsForFileTab(opened.PaneID, projectRoot, os.Getenv("HERDR_TAB_ID"))...).CombinedOutput(); err != nil {
+		return opened.TabID, fmt.Errorf("attach Herdr diff tree: %w: %s", err, out)
+	}
+	if state != nil {
+		state.setDiff(workspaceID, path, mode, opened.TabID)
+	}
+	return opened.TabID, nil
+}
+
 func closeTabBestEffort(bin, tabID string) {
 	_ = exec.Command(bin, "tab", "close", tabID).Run()
 }
@@ -128,6 +206,32 @@ func tabIsReusable(bin, tabID, workspaceID, path string) bool {
 	return exec.Command(bin, "tab", "focus", tabID).Run() == nil
 }
 
+func diffTabIsReusable(bin, tabID, workspaceID, path string, mode gitdiff.Mode) bool {
+	out, err := exec.Command(bin, "tab", "get", tabID).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	got, err := parseTabContext(out)
+	if err != nil || got.TabID != tabID || got.WorkspaceID != workspaceID ||
+		got.Label != diffTabLabel(path, mode) || got.PaneCount < 2 {
+		return false
+	}
+	if !tabHasOwnedPane(bin, workspaceID, tabID, path, "Diff") {
+		return false
+	}
+	return exec.Command(bin, "tab", "focus", tabID).Run() == nil
+}
+
+func diffTabLabel(path string, mode gitdiff.Mode) string {
+	prefix := "M"
+	if mode == gitdiff.ModeStaged {
+		prefix = "S"
+	} else if mode == gitdiff.ModeUntracked {
+		prefix = "U"
+	}
+	return prefix + " " + filepath.Base(path)
+}
+
 func openFileTabArgs(workspaceID, path string) []string {
 	return []string{
 		"plugin", "pane", "open",
@@ -137,6 +241,21 @@ func openFileTabArgs(workspaceID, path string) []string {
 		"--workspace", workspaceID,
 		"--cwd", filepath.Dir(path),
 		"--env", "HERDR_FILE_PATH=" + path,
+		"--focus",
+	}
+}
+
+func openDiffTabArgs(workspaceID, path, projectRoot string, mode gitdiff.Mode) []string {
+	return []string{
+		"plugin", "pane", "open",
+		"--plugin", pluginID,
+		"--entrypoint", "diff",
+		"--placement", "tab",
+		"--workspace", workspaceID,
+		"--cwd", filepath.Dir(path),
+		"--env", "HERDR_DIFF_PATH=" + path,
+		"--env", "HERDR_DIFF_ROOT=" + projectRoot,
+		"--env", "HERDR_DIFF_MODE=" + string(mode),
 		"--focus",
 	}
 }
@@ -246,6 +365,10 @@ type paneContext struct {
 }
 
 func tabHasOwnedFilePane(bin, workspaceID, tabID, path string) bool {
+	return tabHasOwnedPane(bin, workspaceID, tabID, path, "File")
+}
+
+func tabHasOwnedPane(bin, workspaceID, tabID, path, label string) bool {
 	out, err := exec.Command(bin, "pane", "list", "--workspace", workspaceID).CombinedOutput()
 	if err != nil {
 		return false
@@ -256,7 +379,7 @@ func tabHasOwnedFilePane(bin, workspaceID, tabID, path string) bool {
 	}
 	wantDir := filepath.Clean(filepath.Dir(path))
 	for _, pane := range panes {
-		if pane.TabID == tabID && pane.WorkspaceID == workspaceID && pane.Label == "File" &&
+		if pane.TabID == tabID && pane.WorkspaceID == workspaceID && pane.Label == label &&
 			filepath.Clean(pane.Cwd) == wantDir {
 			return true
 		}
@@ -298,6 +421,7 @@ func newFileTabState() fileTabState {
 	return fileTabState{
 		Version: 1,
 		Tabs:    make(map[string]map[string]string),
+		Diffs:   make(map[string]map[string]string),
 		Roots:   make(map[string]string),
 	}
 }
@@ -327,6 +451,46 @@ func (s *fileTabState) pathForTab(workspaceID, tabID string) string {
 		}
 	}
 	return ""
+}
+
+func diffStateKey(path string, mode gitdiff.Mode) string {
+	return string(mode) + ":" + path
+}
+
+func (s *fileTabState) diffTabID(workspaceID, path string, mode gitdiff.Mode) string {
+	if s.Diffs == nil || s.Diffs[workspaceID] == nil {
+		return ""
+	}
+	return s.Diffs[workspaceID][diffStateKey(path, mode)]
+}
+
+func (s *fileTabState) setDiff(workspaceID, path string, mode gitdiff.Mode, tabID string) {
+	if s.Diffs == nil {
+		s.Diffs = make(map[string]map[string]string)
+	}
+	if s.Diffs[workspaceID] == nil {
+		s.Diffs[workspaceID] = make(map[string]string)
+	}
+	s.Version = 1
+	s.Diffs[workspaceID][diffStateKey(path, mode)] = tabID
+}
+
+func (s *fileTabState) diffForTab(workspaceID, tabID string) (string, gitdiff.Mode) {
+	for key, savedTabID := range s.Diffs[workspaceID] {
+		if savedTabID != tabID {
+			continue
+		}
+		modeText, path, ok := strings.Cut(key, ":")
+		if !ok {
+			return "", ""
+		}
+		mode := gitdiff.Mode(modeText)
+		if !mode.Valid() {
+			return "", ""
+		}
+		return path, mode
+	}
+	return "", ""
 }
 
 func (s *fileTabState) setRoot(workspaceID, root string) {
@@ -393,6 +557,9 @@ func loadFileTabState(path string) (fileTabState, error) {
 	}
 	if state.Roots == nil {
 		state.Roots = make(map[string]string)
+	}
+	if state.Diffs == nil {
+		state.Diffs = make(map[string]map[string]string)
 	}
 	return state, nil
 }

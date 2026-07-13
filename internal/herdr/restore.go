@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 )
 
 // RestoreFocusedTab rehydrates plugin commands inside Herdr's persisted pane
@@ -71,12 +73,17 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 	state.setRoot(workspaceID, root)
 
 	path := state.pathForTab(workspaceID, tabID)
-	var filePane, treePane paneContext
+	diffPath, diffMode := state.diffForTab(workspaceID, tabID)
+	var filePane, diffPane, treePane paneContext
 	for _, pane := range tabPanes {
 		switch pane.Label {
 		case "File":
 			if filePane.PaneID == "" {
 				filePane = pane
+			}
+		case "Diff":
+			if diffPane.PaneID == "" {
+				diffPane = pane
 			}
 		case "File Tree":
 			if treePane.PaneID == "" {
@@ -92,6 +99,9 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 	}
 	target := filePane
 	if target.PaneID == "" {
+		target = diffPane
+	}
+	if target.PaneID == "" {
 		for _, pane := range tabPanes {
 			if pane.Label != "File Tree" {
 				target = pane
@@ -100,17 +110,22 @@ func restoreFocusedTab(bin, workspaceID, tabID, projectRoot string, state *fileT
 		}
 	}
 	followPaneID := ""
-	if filePane.PaneID == "" {
+	if filePane.PaneID == "" && diffPane.PaneID == "" {
 		followPaneID = target.PaneID
 	}
 
 	if path != "" && filePane.PaneID != "" {
-		if err := rerunRestoredPane(bin, filePane, restoredPaneCommand("file", workspaceID, tabID, filePane.PaneID, root, path, "")); err != nil {
+		if err := rerunRestoredPane(bin, filePane, restoredPaneCommand("file", workspaceID, tabID, filePane.PaneID, root, path, "", "")); err != nil {
+			return err
+		}
+	}
+	if diffPath != "" && diffMode.Valid() && diffPane.PaneID != "" {
+		if err := rerunRestoredPane(bin, diffPane, restoredPaneCommand("diff", workspaceID, tabID, diffPane.PaneID, root, diffPath, diffMode, "")); err != nil {
 			return err
 		}
 	}
 	if treePane.PaneID != "" {
-		return rerunRestoredPane(bin, treePane, restoredPaneCommand("viewer", workspaceID, tabID, treePane.PaneID, root, "", followPaneID))
+		return rerunRestoredPane(bin, treePane, restoredPaneCommand("viewer", workspaceID, tabID, treePane.PaneID, root, "", "", followPaneID))
 	}
 
 	if target.PaneID == "" {
@@ -235,7 +250,7 @@ func rerunRestoredPane(bin string, pane paneContext, command string) error {
 	return nil
 }
 
-func restoredPaneCommand(entrypoint, workspaceID, tabID, paneID, root, path, followPaneID string) string {
+func restoredPaneCommand(entrypoint, workspaceID, tabID, paneID, root, path string, mode gitdiff.Mode, followPaneID string) string {
 	pluginRoot := os.Getenv("HERDR_PLUGIN_ROOT")
 	binary := filepath.Join(pluginRoot, "bin", "file-viewer")
 	env := []string{
@@ -250,8 +265,15 @@ func restoredPaneCommand(entrypoint, workspaceID, tabID, paneID, root, path, fol
 		"HERDR_PLUGIN_ENTRYPOINT_ID=" + entrypoint,
 		"HERDR_TREE_ROOT=" + root,
 	}
-	if path != "" {
+	if path != "" && entrypoint == "file" {
 		env = append(env, "HERDR_FILE_PATH="+path)
+	}
+	if path != "" && entrypoint == "diff" {
+		env = append(env,
+			"HERDR_DIFF_PATH="+path,
+			"HERDR_DIFF_ROOT="+root,
+			"HERDR_DIFF_MODE="+string(mode),
+		)
 	}
 	if followPaneID != "" {
 		env = append(env, "HERDR_TREE_FOLLOW_PANE_ID="+followPaneID)

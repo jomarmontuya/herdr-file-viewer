@@ -4,6 +4,7 @@ The current installed plugin UX is represented by:
 
 - `right-side-tree.txt`
 - `file-tab-with-tree.txt`
+- `source-control.txt`
 
 The older `browse.txt`, `staging.txt`, `git-branches.txt`, and `help.txt` files
 are retained as legacy references for the upstream-style full viewer that still

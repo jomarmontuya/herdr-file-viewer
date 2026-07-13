@@ -1,0 +1,18 @@
+Herdr right sidebar with Source Control selected
+
+┌──────────────────────────────────────────────────────────────┬──────────────────────────────┐
+│ ~/project git:(main)                                         │ Source Control — project      │
+│ ❯ codex                                                     │ ▾ Staged Changes (1)      │[F]│
+│                                                              │ ▸ M apps/web/page.tsx     │   │
+│                                                              │ ▾ Changes (2)             │[G]│
+│                                                              │   M packages/api/home.ts  │ 2 │
+│                                                              │   U notes.txt              │   │
+│                                                              │                              │
+│                                                              │ ↑↓/jk move · enter diff      │
+└──────────────────────────────────────────────────────────────┴──────────────────────────────┘
+
+Notes:
+- The Git badge counts unique changed files.
+- Partially staged files appear once under each applicable group.
+- Clicking a row opens the correct staged or worktree diff in a Herdr tab.
+- Diff tabs keep the project-root file tree attached on the right.

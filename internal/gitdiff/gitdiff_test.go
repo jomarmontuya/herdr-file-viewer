@@ -130,6 +130,34 @@ func TestLoadModeUntrackedShowsWholeFile(t *testing.T) {
 	}
 }
 
+func TestModeValidation(t *testing.T) {
+	for _, mode := range []Mode{ModeHead, ModeStaged, ModeWorktree, ModeUntracked} {
+		if !mode.Valid() {
+			t.Errorf("expected %q to be valid", mode)
+		}
+	}
+	if Mode("mystery").Valid() {
+		t.Fatal("unknown diff mode must be rejected")
+	}
+	if d := LoadMode(context.Background(), t.TempDir(), "a.txt", Mode("mystery")); !d.Empty {
+		t.Fatal("unknown diff mode should return an empty diff")
+	}
+}
+
+func TestLoadRefShowsCommittedChanges(t *testing.T) {
+	root := repoWithChange(t)
+	d := LoadRef(context.Background(), root, "HEAD", "latest commit")
+	if d.Empty || len(d.Lines) == 0 {
+		t.Fatal("HEAD should produce the committed file diff")
+	}
+	if d.Path != "latest commit" {
+		t.Fatalf("diff label = %q, want latest commit", d.Path)
+	}
+	if d := LoadRef(context.Background(), t.TempDir(), "HEAD", "missing"); !d.Empty {
+		t.Fatal("non-repository ref should return an empty diff")
+	}
+}
+
 func diffText(d FileDiff) string {
 	var b strings.Builder
 	for _, line := range d.Lines {

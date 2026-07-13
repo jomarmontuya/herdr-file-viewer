@@ -1,6 +1,6 @@
 id = "medianeth.file-viewer"
 name = "File Tree"
-version = "0.6.4"
+version = "0.7.0"
 min_herdr_version = "0.7.0"
 description = "Clickable project file tree that opens files in Herdr workspace tabs."
 platforms = ["linux", "macos"]
@@ -42,6 +42,15 @@ command = ["./bin/file-viewer", "--tree-only"]
 [[panes]]
 id = "file"
 title = "File"
+placement = "tab"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/file-viewer\""]
+
+# Read-only staged/worktree review opened from the Source Control activity.
+# HERDR_DIFF_PATH, HERDR_DIFF_ROOT and HERDR_DIFF_MODE are injected by the
+# explorer when the user selects a changed file.
+[[panes]]
+id = "diff"
+title = "Diff"
 placement = "tab"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/file-viewer\""]
 

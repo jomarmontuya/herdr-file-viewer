@@ -127,7 +127,7 @@ func (p *diffPanel) render() {
 		return
 	}
 	if p.diff.Empty || len(p.diff.Lines) == 0 {
-		p.vp.SetContent(p.gutter.Render("\n  no changes against HEAD"))
+		p.vp.SetContent(p.gutter.Render("\n  no changes in this review"))
 		return
 	}
 

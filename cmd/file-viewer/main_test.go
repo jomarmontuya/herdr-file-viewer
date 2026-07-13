@@ -43,6 +43,23 @@ func TestDiffTabsLeaveMouseSelectionToHerdr(t *testing.T) {
 	}
 }
 
+func TestNewModelBuildsDiffTabFromInjectedEnvironment(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "changed.txt")
+	t.Setenv("HERDR_DIFF_ROOT", root)
+	t.Setenv("HERDR_DIFF_PATH", path)
+	t.Setenv("HERDR_DIFF_MODE", "worktree")
+	t.Setenv("HERDR_FILE_PATH", "")
+
+	model, err := newModel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := model.(ui.DiffTabModel); !ok {
+		t.Fatalf("diff environment should select DiffTabModel, got %T", model)
+	}
+}
+
 func TestProgramOptionsOnlyEmitMouseTrackingForInteractiveTreePanes(t *testing.T) {
 	const enableCellMotion = "\x1b[?1002h"
 

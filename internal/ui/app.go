@@ -86,12 +86,16 @@ type Model struct {
 	bfocus browseFocus
 	skind  searchKind
 
-	tree   *explorer.Tree
-	viewer viewer.Model
-	finder finderPanel
-	search searchPanel
-	diff   diffPanel
-	log    logPanel
+	tree                *explorer.Tree
+	treeView            treeView
+	sourceChanges       []gitstatus.Change
+	sourceControlLines  []sourceControlLine
+	sourceControlCursor int
+	viewer              viewer.Model
+	finder              finderPanel
+	search              searchPanel
+	diff                diffPanel
+	log                 logPanel
 
 	git          gitstatus.Status
 	currentFile  string // absolute path of the file shown in the viewer
@@ -148,6 +152,11 @@ type gitBranchesMsg struct{ branches []gitlog.Branch }
 
 type gitChangesMsg struct{ changes []gitstatus.Change }
 
+type treeGitRefreshMsg struct {
+	status  gitstatus.Status
+	changes []gitstatus.Change
+}
+
 type branchSwitchedMsg struct{ err error }
 
 // gitOpDoneMsg carries the result of a create/commit/merge/rebase/delete op.
@@ -163,6 +172,8 @@ type updateMsg struct{ latest string }
 type editorClosedMsg struct{ err error }
 
 type fileTabOpenedMsg struct{ err error }
+
+type diffTabOpenedMsg struct{ err error }
 
 type treeCWDMsg struct {
 	root string
@@ -269,7 +280,7 @@ func followTreeCWDCommand() tea.Cmd {
 }
 
 func treeOnlyRefreshCmd(root string) tea.Cmd {
-	return tea.Batch(loadGitStatusCmd(root), followTreeCWDCommand())
+	return tea.Batch(loadTreeGitRefreshCmd(root), followTreeCWDCommand())
 }
 
 // --- commands ---------------------------------------------------------------
@@ -284,6 +295,15 @@ func loadFilesCmd(root string) tea.Cmd {
 func loadGitStatusCmd(root string) tea.Cmd {
 	return func() tea.Msg {
 		return gitStatusMsg{status: gitstatus.Load(context.Background(), root)}
+	}
+}
+
+func loadTreeGitRefreshCmd(root string) tea.Cmd {
+	return func() tea.Msg {
+		return treeGitRefreshMsg{
+			status:  gitstatus.Load(context.Background(), root),
+			changes: gitstatus.Changes(context.Background(), root),
+		}
 	}
 }
 
@@ -419,6 +439,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gitChangesMsg:
 		m.log.setChanges(msg.changes)
+		if m.treeOnly {
+			m.setSourceControlChanges(msg.changes)
+		}
+		return m, nil
+
+	case treeGitRefreshMsg:
+		m.git = msg.status
+		m.log.setChanges(msg.changes)
+		m.setSourceControlChanges(msg.changes)
 		return m, nil
 
 	case branchSwitchedMsg:
@@ -465,6 +494,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case diffTabOpenedMsg:
+		if msg.err != nil {
+			m.statusNote = "diff tab failed: " + msg.err.Error()
+		}
+		return m, nil
+
 	case treeCWDMsg:
 		if msg.err != nil || msg.root == "" || filepath.Clean(msg.root) == filepath.Clean(m.root) {
 			return m, nil
@@ -474,7 +509,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.statusNote = ""
-		return m, loadGitStatusCmd(m.root)
+		return m, treeOnlyRefreshCmd(m.root)
 
 	case highlightMsg:
 		if msg.gen == m.highlightGen {
@@ -530,6 +565,29 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		topH = 1
 	}
 	row := msg.Y - 1 // terminal row 0 is the app header
+	if m.treeOnly && msg.X >= m.width-activityRailWidth && msg.X < m.width && row >= 0 && row < topH {
+		switch row {
+		case activityFilesRow:
+			m.treeView = treeViewFiles
+		case activityGitRow:
+			m.treeView = treeViewSourceControl
+		}
+		return m, nil
+	}
+	if m.treeOnly {
+		clickWidth -= activityRailWidth
+		if m.treeView == treeViewSourceControl {
+			if msg.X < 0 || msg.X >= clickWidth || row < 0 || row >= topH {
+				return m, nil
+			}
+			index := m.sourceControlStart(topH) + row
+			if index < 0 || index >= len(m.sourceControlLines) || !m.sourceControlLines[index].selectable {
+				return m, nil
+			}
+			m.sourceControlCursor = index
+			return m, m.openSelectedDiffTab()
+		}
+	}
 	if msg.X < 0 || msg.X >= clickWidth || row < 0 || row >= topH {
 		return m.forwardToActive(msg)
 	}
@@ -583,6 +641,39 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "g" {
+		m.treeView = treeViewSourceControl
+		return m, nil
+	}
+	if msg.String() == "f" {
+		m.treeView = treeViewFiles
+		return m, nil
+	}
+	if msg.String() == "tab" {
+		if m.treeView == treeViewFiles {
+			m.treeView = treeViewSourceControl
+		} else {
+			m.treeView = treeViewFiles
+		}
+		return m, nil
+	}
+	if m.treeView == treeViewSourceControl {
+		switch msg.String() {
+		case "q":
+			m.persistTreeState()
+			return m, tea.Quit
+		case "r":
+			m.tree.Refresh()
+			return m, treeOnlyRefreshCmd(m.root)
+		case "up", "k":
+			m.moveSourceControl(-1)
+		case "down", "j":
+			m.moveSourceControl(1)
+		case "enter", " ":
+			return m, m.openSelectedDiffTab()
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "q":
 		m.persistTreeState()
@@ -644,6 +735,19 @@ func (m Model) openSelectedFileTab() tea.Cmd {
 	root := m.root
 	return func() tea.Msg {
 		return fileTabOpenedMsg{err: herdr.OpenFileTab(workspaceID, path, root)}
+	}
+}
+
+func (m Model) openSelectedDiffTab() tea.Cmd {
+	line, ok := m.selectedSourceControlLine()
+	if !ok {
+		return nil
+	}
+	workspaceID := os.Getenv("HERDR_WORKSPACE_ID")
+	path := filepath.Join(m.root, filepath.FromSlash(line.change.Path))
+	root, diffMode := m.root, line.mode
+	return func() tea.Msg {
+		return diffTabOpenedMsg{err: herdr.OpenDiffTab(workspaceID, path, root, diffMode)}
 	}
 }
 
@@ -1434,11 +1538,21 @@ func (m Model) viewTree() string {
 	if bodyH < 1 {
 		bodyH = 1
 	}
-	help := "↑↓/jk move · ←→/hl expand · enter open · r refresh · q quit"
+	contentW := m.width - activityRailWidth
+	if contentW < 1 {
+		contentW = 1
+	}
+	content := m.renderExplorer(contentW, bodyH)
+	help := "↑↓/jk move · ←→/hl expand · enter open · g changes · r refresh"
+	if m.treeView == treeViewSourceControl {
+		content = m.renderSourceControl(contentW, bodyH)
+		help = "↑↓/jk move · enter diff · f files · r refresh · q quit"
+	}
 	if m.statusNote != "" {
 		help = m.statusNote
 	}
-	return m.frame(m.renderExplorer(m.width, bodyH), help)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, content, m.renderActivityRail(activityRailWidth, bodyH))
+	return m.frame(body, help)
 }
 
 // viewPrompt renders the centered text-input overlay for new-branch / commit.
@@ -1644,6 +1758,9 @@ func (m Model) frame(body, help string) string {
 func (m Model) headerText() string {
 	name := filepath.Base(m.root)
 	if m.treeOnly {
+		if m.treeView == treeViewSourceControl {
+			return "  Source Control — " + name
+		}
 		return "  File Tree — " + name
 	}
 	branch := ""

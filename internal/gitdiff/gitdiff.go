@@ -43,12 +43,43 @@ type FileDiff struct {
 	Empty   bool // no differences
 }
 
+// Mode selects which two Git states a review compares.
+type Mode string
+
+const (
+	ModeHead      Mode = "head"      // HEAD -> working tree (legacy review)
+	ModeStaged    Mode = "staged"    // HEAD -> index
+	ModeWorktree  Mode = "worktree"  // index -> working tree
+	ModeUntracked Mode = "untracked" // empty file -> untracked file
+)
+
+// Valid reports whether mode can be loaded by LoadMode.
+func (m Mode) Valid() bool {
+	switch m {
+	case ModeHead, ModeStaged, ModeWorktree, ModeUntracked:
+		return true
+	default:
+		return false
+	}
+}
+
 var hunkRe = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
 
 // Load returns the diff of the file at rel (a slash path relative to root)
 // against HEAD. Untracked files have no HEAD entry, so they are diffed against
 // an empty file (every line shows as an addition).
 func Load(ctx context.Context, root, rel string, untracked bool) FileDiff {
+	mode := ModeHead
+	if untracked {
+		mode = ModeUntracked
+	}
+	return LoadMode(ctx, root, rel, mode)
+}
+
+// LoadMode returns a file diff for one precise Source Control boundary. This is
+// important for partially staged files: their staged and worktree reviews are
+// intentionally different tabs.
+func LoadMode(ctx context.Context, root, rel string, mode Mode) FileDiff {
 	fd := FileDiff{Path: rel, Empty: true}
 
 	abs, err := filepath.Abs(root)
@@ -57,14 +88,23 @@ func Load(ctx context.Context, root, rel string, untracked bool) FileDiff {
 	}
 
 	var cmd *exec.Cmd
-	if untracked {
+	switch mode {
+	case ModeUntracked:
 		file := filepath.Join(abs, filepath.FromSlash(rel))
 		// --no-index always exits non-zero when files differ; that's expected.
 		cmd = exec.CommandContext(ctx, "git", "-C", abs,
 			"diff", "--no-color", "--no-index", "--", "/dev/null", file)
-	} else {
+	case ModeStaged:
+		cmd = exec.CommandContext(ctx, "git", "-C", abs,
+			"diff", "--cached", "--no-color", "--", rel)
+	case ModeWorktree:
+		cmd = exec.CommandContext(ctx, "git", "-C", abs,
+			"diff", "--no-color", "--", rel)
+	case ModeHead:
 		cmd = exec.CommandContext(ctx, "git", "-C", abs,
 			"diff", "--no-color", "HEAD", "--", rel)
+	default:
+		return fd
 	}
 
 	var out bytes.Buffer

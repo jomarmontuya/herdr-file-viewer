@@ -19,6 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/jomarmontuya/herdr-file-viewer/internal/filetab"
+	"github.com/jomarmontuya/herdr-file-viewer/internal/gitdiff"
 	herdrbridge "github.com/jomarmontuya/herdr-file-viewer/internal/herdr"
 	"github.com/jomarmontuya/herdr-file-viewer/internal/ui"
 )
@@ -72,7 +73,7 @@ func programOptions(model tea.Model) []tea.ProgramOption {
 // full-viewer panes still need Bubble Tea mouse events for clickable tree rows.
 func shouldCaptureMouse(model tea.Model) bool {
 	switch model.(type) {
-	case filetab.Model, *filetab.Model:
+	case filetab.Model, *filetab.Model, ui.DiffTabModel, *ui.DiffTabModel:
 		return false
 	default:
 		return true
@@ -80,6 +81,9 @@ func shouldCaptureMouse(model tea.Model) bool {
 }
 
 func newModel() (tea.Model, error) {
+	if path := os.Getenv("HERDR_DIFF_PATH"); path != "" {
+		return ui.NewDiffTab(os.Getenv("HERDR_DIFF_ROOT"), path, gitdiff.Mode(os.Getenv("HERDR_DIFF_MODE")))
+	}
 	if path := os.Getenv("HERDR_FILE_PATH"); path != "" {
 		return filetab.New(path)
 	}
