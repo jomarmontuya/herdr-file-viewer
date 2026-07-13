@@ -25,6 +25,15 @@ Install the public plugin into Herdr:
 herdr plugin install jomarmontuya/herdr-file-viewer
 ```
 
+The installer clones the repo and runs the manifest build command, so Go 1.25+
+must be available on your `PATH`. If you previously linked a local development
+checkout, Herdr will refuse to install over it; unlink that first:
+
+```sh
+herdr plugin unlink medianeth.file-viewer
+herdr plugin install jomarmontuya/herdr-file-viewer
+```
+
 Then create or open a Herdr workspace. New workspaces open with the normal CLI
 pane and a narrow right-side file tree by default. Click folders to expand or
 collapse them; click a file to open it as a Herdr tab with its own right-side
